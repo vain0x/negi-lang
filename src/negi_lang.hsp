@@ -6,8 +6,8 @@
 // 真理値
 // -----------------------------------------------
 
-#define true 1
-#define false 0
+#const true 1
+#const false 0
 
 // -----------------------------------------------
 // トークンの種類
@@ -54,18 +54,26 @@
 // -----------------------------------------------
 
 #enum op_err = 0
-#enum op_add
-#enum op_sub
-#enum op_mul
-#enum op_div
-#enum op_mod
+#enum op_eq // == (equal)
+#enum op_ne // != (not equal)
+#enum op_lt // < (less than)
+#enum op_le // <= (less than or equal to)
+#enum op_gt // < (greater than)
+#enum op_ge // >= (greater than or equal to)
+#enum op_add // + (addition)
+#enum op_sub // - (subtraction)
+#enum op_mul // * (multiplication)
+#enum op_div // / (division)
+#enum op_mod // % (modulo)
 
 // -----------------------------------------------
 // 演算子のレベルの種類
 // -----------------------------------------------
 
-#enum op_level_add = 0
-#enum op_level_mul
+#enum op_level_top = 0
+#enum op_level_cmp = op_level_top // comparison
+#enum op_level_add // additive
+#enum op_level_mul // multitive
 
 // -----------------------------------------------
 // 文字の種類の判定
@@ -356,6 +364,26 @@
 
 	op_text = negi_lang_tk_text(ti)
 
+	if op_level == op_level_cmp {
+		if op_text == "==" {
+			return op_eq
+		}
+		if op_text == "!=" {
+			return op_ne
+		}
+		if op_text == "<" {
+			return op_lt
+		}
+		if op_text == "<=" {
+			return op_le
+		}
+		if op_text == ">" {
+			return op_gt
+		}
+		if op_text == ">=" {
+			return op_ge
+		}
+	}
 	if op_level == op_level_add {
 		if op_text == "+" {
 			return op_add
@@ -409,7 +437,7 @@
 
 // 指定されたトークンで始まる式をパースする。
 #defcfunc negi_lang_parse_ex var ti
-	return negi_lang_parse_bin(ti, op_level_add)
+	return negi_lang_parse_bin(ti, op_level_top)
 
 #deffunc negi_lang_parse \
 	local ei, local ti
@@ -460,6 +488,24 @@
 	el = negi_lang_eval_ex(g_ex_ls(ei))
 	er = negi_lang_eval_ex(g_ex_rs(ei))
 
+	if op == op_eq {
+		return el == er
+	}
+	if op == op_ne {
+		return el != er
+	}
+	if op == op_lt {
+		return el < er
+	}
+	if op == op_le {
+		return el <= er
+	}
+	if op == op_gt {
+		return el > er
+	}
+	if op == op_gt {
+		return el >= er
+	}
 	if op == op_add {
 		return el + er
 	}

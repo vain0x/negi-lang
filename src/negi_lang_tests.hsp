@@ -109,6 +109,10 @@
 	eval_test "add", "2 + 3", "", 5
 	eval_test "add and sub", "7 - 2 + 3", "", 8
 	eval_test "add and mul", "21 / 5 * 2 + 7 % 3", "", 21 / 5 * 2 + 7 \ 3
+	eval_test "comparison eq true", "1 == 1", "", 1
+	eval_test "comparison eq false", "1 == 2", "", 0
+	eval_test "comparison lt true", "1 < 2", "", 1
+	eval_test "comparison lt false", "1 < 1", "", 0
 
 	eval_test "syntax err", "1 + + 2", {"
 		1:5..1:6 near '+'
