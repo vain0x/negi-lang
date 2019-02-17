@@ -31,8 +31,8 @@
 // 右カッコ
 #enum tk_paren_r
 
-// +
-#enum tk_add
+// 演算子
+#enum tk_op
 
 // -----------------------------------------------
 // 式の種類
@@ -55,6 +55,7 @@
 
 #enum op_err = 0
 #enum op_add
+#enum op_sub
 
 // -----------------------------------------------
 // 文字の種類の判定
@@ -68,6 +69,13 @@
 
 // 識別子に使える文字
 #define ctype is_ident_char(%1) (is_digit(%1) || is_alphabet(%1) || (%1) == '_')
+
+// 演算子に使える文字
+#define ctype is_op_char(%1) \
+	((%1) == '+' || (%1) == '-' || (%1) == '*' || (%1) == '/' || (%1) == '%%' \
+	|| (%1) == '&' || (%1) == '|' || (%1) == '^' || (%1) == '~' || (%1) == '!' \
+	|| (%1) == '=' || (%1) == '<' || (%1) == '>' || (%1) == ',' || (%1) == ';' \
+	)
 
 // -----------------------------------------------
 // 致命的なエラー
@@ -191,9 +199,16 @@
 			continue
 		}
 
-		if c == '+' {
+		if is_op_char(c) {
 			r++
-			negi_lang_tk_add tk_add, l, r
+			repeat
+				if r >= g_src_len { break }
+
+				c = peek(g_src, r)
+				if is_op_char(c) == false { break }
+				r++
+			loop
+			negi_lang_tk_add tk_op, l, r
 			continue
 		}
 
@@ -265,18 +280,31 @@
 	return negi_lang_ex_add_err(ti, "Expected an expression")
 
 #defcfunc negi_lang_parse_additive var ti, \
-	local l, local r
+	local l, local r, local op_text, local op
 
 	l = negi_lang_parse_atom(ti)
 
 	repeat
-		if g_tk_kinds(ti) == tk_add {
-			ti++
-			r = negi_lang_parse_atom(ti)
-			l = negi_lang_ex_add_bin(op_add, l, r)
-			continue
+		if g_tk_kinds(ti) != tk_op {
+			break
 		}
-		break
+
+		op_text = negi_lang_tk_value(ti)
+		op = op_err
+
+		if op_text == "+" {
+			op = op_add
+		}
+		if op_text == "-" {
+			op = op_sub
+		}
+		if op == op_err {
+			break
+		}
+
+		ti++
+		r = negi_lang_parse_atom(ti)
+		l = negi_lang_ex_add_bin(op, l, r)
 	loop
 	return l
 
@@ -309,6 +337,9 @@
 
 	if op == op_add {
 		return el + er
+	}
+	if op == op_sub {
+		return el - er
 	}
 	logmes "op = " + op
 	failwith "Unknown op"
