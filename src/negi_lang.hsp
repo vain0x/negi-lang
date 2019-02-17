@@ -189,8 +189,8 @@
 
 	buf = ""
 	repeat g_err_count
-		l = g_err_ls(ri)
-		r = g_err_rs(ri)
+		l = g_err_ls(cnt)
+		r = g_err_rs(cnt)
 		negi_lang_find_pos l, ly, lx
 		negi_lang_find_pos r, ry, rx
 
