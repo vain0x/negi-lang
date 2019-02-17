@@ -47,7 +47,7 @@
 // 無効な式番号
 // -----------------------------------------------
 
-#const ex_id_none 0
+#const ei_none 0
 
 // -----------------------------------------------
 // 演算子の種類
@@ -237,8 +237,8 @@
 // 式を追加して、その式番号を返す。
 #defcfunc negi_lang_ex_add int kind
 	g_ex_kinds(g_ex_count) = kind
-	g_ex_ls(g_ex_count) = ex_id_none
-	g_ex_rs(g_ex_count) = ex_id_none
+	g_ex_ls(g_ex_count) = ei_none
+	g_ex_rs(g_ex_count) = ei_none
 	g_ex_ints(g_ex_count) = 0
 	g_ex_strs(g_ex_count) = ""
 	g_ex_count++
@@ -362,9 +362,9 @@
 
 	assert g_ex_count == 0
 
-	// 式番号 ex_id_none を無効な式を表すものとして登録する。
+	// 式番号 ei_none を無効な式を表すものとして登録する。
 	ei = negi_lang_ex_add_err(0, "NOT AN EXPRESSION")
-	assert ei == ex_id_none
+	assert ei == ei_none
 
 	ti = 0
 	ei = negi_lang_parse_ex(ti)
