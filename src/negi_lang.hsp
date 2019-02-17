@@ -370,7 +370,11 @@
 	assert ei == ei_none
 
 	ti = 0
-	g_ei_root = negi_lang_parse_ex(ti)
+	if g_tk_kinds(ti) == tk_eof {
+		g_ei_root = negi_lang_ex_add_int(ex_int, 0)
+	} else {
+		g_ei_root = negi_lang_parse_ex(ti)
+	}
 	assert g_ei_root != ei_none
 	return
 
@@ -412,7 +416,12 @@
 	if g_ex_kinds(ei) == ex_op {
 		return negi_lang_eval_ex_op(ei)
 	}
-	return
+	if g_ex_kinds(ei) == ex_err {
+		logmes "ERROR!"
+		return 0
+	}
+	logmes "ex_kind = " + g_ex_kinds(ei)
+	failwith "Unknown expression kind"
 
 #deffunc negi_lang_eval
 	assert g_ei_root != ei_none

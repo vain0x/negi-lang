@@ -46,6 +46,7 @@
 
 	test_begin
 
+	eval_test "empty", "", "", 0
 	eval_test "zero exit code", "0", "", 0
 	eval_test "non-zero exit code", "42", "", 42
 	eval_test "add", "2 + 3", "", 5
