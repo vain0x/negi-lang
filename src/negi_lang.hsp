@@ -56,6 +56,16 @@
 #enum op_err = 0
 #enum op_add
 #enum op_sub
+#enum op_mul
+#enum op_div
+#enum op_mod
+
+// -----------------------------------------------
+// 演算子のレベルの種類
+// -----------------------------------------------
+
+#enum op_level_add = 0
+#enum op_level_mul
 
 // -----------------------------------------------
 // 文字の種類の判定
@@ -224,6 +234,7 @@
 // 構文解析
 // -----------------------------------------------
 
+// 式を追加して、その式番号を返す。
 #defcfunc negi_lang_ex_add int kind
 	g_ex_kinds(g_ex_count) = kind
 	g_ex_ls(g_ex_count) = ex_id_none
@@ -264,6 +275,7 @@
 	g_ex_rs(ei) = r
 	return ei
 
+// アトム式 (1つのトークンからなる式) をパースする。
 #defcfunc negi_lang_parse_atom var ti, \
 	local value
 
@@ -279,37 +291,71 @@
 	}
 	return negi_lang_ex_add_err(ti, "Expected an expression")
 
-#defcfunc negi_lang_parse_additive var ti, \
+// トークンが演算子で、指定されたレベルを持つなら、その演算子の種類を返す。
+// そうでなければ op_err を返す。
+#defcfunc negi_lang_parse_op var ti, int op_level, \
+	local op_text
+
+	if g_tk_kinds(ti) != tk_op {
+		return op_err
+	}
+
+	op_text = negi_lang_tk_text(ti)
+
+	if op_level == op_level_add {
+		if op_text == "+" {
+			return op_add
+		}
+		if op_text == "-" {
+			return op_sub
+		}
+	}
+	if op_level == op_level_mul {
+		if op_text == "*" {
+			return op_mul
+		}
+		if op_text == "/" {
+			return op_div
+		}
+		if op_text == "%" {
+			return op_mod
+		}
+	}
+	return op_err
+
+// 指定されたレベルの演算子より一段階結合力が高い演算子の式をパースする。
+#defcfunc negi_lang_parse_bin_next var ti, int op_level
+
+	if op_level == op_mul {
+		return negi_lang_parse_atom(ti)
+	}
+	return negi_lang_parse_bin(ti, op_level + 1)
+
+// 指定されたレベルの演算子からなる、2項演算子の式をパースする。
+#defcfunc negi_lang_parse_bin var ti, int op_level, \
 	local l, local r, local op_text, local op
 
-	l = negi_lang_parse_atom(ti)
+	l = negi_lang_parse_bin_next(ti, op_level)
 
 	repeat
 		if g_tk_kinds(ti) != tk_op {
 			break
 		}
 
-		op_text = negi_lang_tk_text(ti)
-		op = op_err
-
-		if op_text == "+" {
-			op = op_add
-		}
-		if op_text == "-" {
-			op = op_sub
-		}
+		op = negi_lang_parse_op(ti, op_level)
 		if op == op_err {
 			break
 		}
 
 		ti++
-		r = negi_lang_parse_atom(ti)
+		r = negi_lang_parse_bin_next(ti, op_level)
 		l = negi_lang_ex_add_bin(op, l, r)
 	loop
 	return l
 
+// 指定されたトークンで始まる式をパースする。
 #defcfunc negi_lang_parse_ex var ti
-	return negi_lang_parse_additive(ti)
+	return negi_lang_parse_bin(ti, op_level_add)
 
 #deffunc negi_lang_parse \
 	local ei, local ti
@@ -328,6 +374,7 @@
 // 評価
 // -----------------------------------------------
 
+// 2項演算の式を計算する。
 #defcfunc negi_lang_eval_ex_op int ei, \
 	local op, local el, local er
 
@@ -340,6 +387,15 @@
 	}
 	if op == op_sub {
 		return el - er
+	}
+	if op == op_mul {
+		return el * er
+	}
+	if op == op_div {
+		return el / er
+	}
+	if op == op_mod {
+		return el \ er
 	}
 	logmes "op = " + op
 	failwith "Unknown op"

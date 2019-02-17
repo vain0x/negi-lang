@@ -13,7 +13,7 @@
 
 #deffunc test_end \
 	local status
-	
+
 	if g_pass == 0 || g_fail > 0 {
 		status = "fail"
 	} else {
@@ -50,6 +50,7 @@
 	eval_test "non-zero exit code", "42", "", 42
 	eval_test "add", "2 + 3", "", 5
 	eval_test "add and sub", "7 - 2 + 3", "", 8
+	eval_test "add and mul", "21 / 5 * 2 + 7 % 3", "", 21 / 5 * 2 + 7 \ 3
 
 	test_end
 	return
