@@ -135,7 +135,7 @@
 	return
 
 // ti 番目のトークンを構成する文字列を取得する。
-#defcfunc negi_lang_tk_value int ti
+#defcfunc negi_lang_tk_text int ti
 	assert ti < g_tk_count
 	return strmid(g_src, g_tk_ls(ti), g_tk_rs(ti) - g_tK_ls(ti))
 
@@ -268,12 +268,12 @@
 	local value
 
 	if g_tk_kinds(ti) == tk_int {
-		value = int(negi_lang_tk_value(ti))
+		value = int(negi_lang_tk_text(ti))
 		ti++
 		return negi_lang_ex_add_int(ex_int, value)
 	}
 	if g_tk_kinds(ti) == tk_ident {
-		value = negi_lang_tk_value(ti)
+		value = negi_lang_tk_text(ti)
 		ti++
 		return negi_lang_ex_add_str(ex_ident, value)
 	}
@@ -289,7 +289,7 @@
 			break
 		}
 
-		op_text = negi_lang_tk_value(ti)
+		op_text = negi_lang_tk_text(ti)
 		op = op_err
 
 		if op_text == "+" {
