@@ -1,0 +1,257 @@
+// ネギ言語処理系
+
+#module m_negi_lang
+
+// -----------------------------------------------
+// 真理値
+// -----------------------------------------------
+
+#define true 1
+#define false 0
+
+// -----------------------------------------------
+// トークンの種類
+// -----------------------------------------------
+
+// ソースコードの末尾を表すトークン
+#enum tk_eof = 0
+
+// ソースコードに使えないトークン
+#enum tk_err
+
+// 整数を表すトークン
+#enum tk_int
+
+// 識別子を表すトークン
+#enum tk_ident
+
+// 左カッコ
+#enum tk_paren_l
+
+// 右カッコ
+#enum tk_paren_r
+
+// -----------------------------------------------
+// 式の種類
+// -----------------------------------------------
+
+#enum ex_err = 0
+#enum ex_int
+#enum ex_ident
+#enum ex_call
+
+// -----------------------------------------------
+// 文字の種類の判定
+// -----------------------------------------------
+
+// 数字
+#define ctype is_digit(%1) ('0' <= (%1) && (%1) <= '9')
+
+// アルファベット
+#define ctype is_alphabet(%1) (('a' <= (%1) && (%1) <= 'z') || ('A' <= (%1) && (%1) <= 'Z'))
+
+// 識別子に使える文字
+#define ctype is_ident_char(%1) (is_digit(%1) || is_alphabet(%1) || (%1) == '_')
+
+// -----------------------------------------------
+// 致命的なエラー
+// -----------------------------------------------
+
+#define fatal(%1) \
+	dialog "FATAL ERROR: " + str(%1) + " \nFILE: " + __FILE__ + "\nLINE: " + __LINE__, 1, "negi-lang" :\
+	exit 1
+
+// -----------------------------------------------
+// 初期化
+// -----------------------------------------------
+
+#deffunc negi_lang_begin str src
+	// 与えられたソースコード
+	g_src = src
+	g_src_len = strlen(src)
+
+	// トークンのリスト
+	// kind: 種類
+	// l: トークンを構成する文字列の開始の位置
+	// r: トークンを構成する文字列の終わりの位置
+	dim g_tk_kinds
+	dim g_tk_ls
+	dim g_tk_rs
+	g_tk_count = 0
+
+	// 式のリスト
+	// kind: 種類
+	// int: 式に関連する整数値
+	dim g_ex_kinds
+	dim g_ex_ints
+	sdim g_ex_strs
+	g_ex_count = 0
+
+	// 終了コード
+	g_eval_exit = 0
+	return
+
+// -----------------------------------------------
+// 字句解析
+// -----------------------------------------------
+
+// ソースコードの位置 l から r までの文字列を種類 kind のトークンとしてリストに追加する。
+#deffunc negi_lang_tk_add int kind, int l, int r
+
+	// tk_eof 以外のトークンの長さはゼロでない。さもないと無限ループになるおそれがある。
+	assert kind == tk_eof || l < r
+
+ 	g_tk_kinds(g_tk_count) = kind
+	g_tk_ls(g_tk_count) = l
+	g_tk_rs(g_tk_count) = r
+	g_tk_count++
+	return
+
+// ti 番目のトークンを構成する文字列を取得する。
+#defcfunc negi_lang_tk_value int ti
+	assert ti < g_tk_count
+	return strmid(g_src, g_tk_ls(ti), g_tk_rs(ti) - g_tK_ls(ti))
+
+#deffunc negi_lang_tokenize \
+	local c, local l, local r
+
+	assert g_tk_count == 0
+
+	repeat
+		l = r
+
+		if r >= g_src_len {
+			negi_lang_tk_add tk_eof, l, r
+			break
+		}
+
+		c = peek(g_src, l)
+
+		if c == ' ' || c == '\t' || c == '\r' || c == '\n' {
+			r++
+			continue
+		}
+
+		if c == '+' || c == '-' || is_digit(c) {
+			r++
+			repeat
+				if r >= g_src_len { break }
+				if is_digit(peek(g_src, r)) == false { break }
+				r++
+			loop
+
+			negi_lang_tk_add tk_int, l ,r
+			continue
+		}
+
+		if c == '_' || is_alphabet(c) {
+			r++
+			repeat
+				if r >= g_src_len { break }
+
+				c = peek(g_src, r)
+				if is_ident_char(c) == false { break }
+				r++
+			loop
+
+			negi_lang_tk_add tk_ident, l, r
+			continue
+		}
+
+		if c == '(' {
+			r++
+			negi_lang_tk_add tk_paren_l, l, r
+			continue
+		}
+
+		if c == ')' {
+			r++
+			negi_lang_tk_add tk_paren_r, l, r
+			continue
+		}
+
+		r++
+		negi_lang_tk_add tk_err, l, r
+	loop
+
+	assert r == g_src_len
+	return
+
+// -----------------------------------------------
+// 構文解析
+// -----------------------------------------------
+
+#defcfunc negi_lang_ex_add_int int kind, int value
+	g_ex_kinds(g_ex_count) = kind
+	g_ex_ints(g_ex_count) = value
+	g_ex_strs(g_ex_count) = ""
+	g_ex_count++
+	return g_ex_count - 1
+
+#defcfunc negi_lang_ex_add_str int kind, str value
+	g_ex_kinds(g_ex_count) = kind
+	g_ex_ints(g_ex_count) = 0
+	g_ex_strs(g_ex_count) = value
+	g_ex_count++
+	return g_ex_count - 1
+
+#defcfunc negi_lang_parse_atom var ti, \
+	local kind, local value
+
+	kind = g_tk_kinds(ti)
+
+	if kind == tk_eof {
+		return negi_lang_ex_add_str(ex_err, "UNEXPECTED EOF")
+	}
+	if kind == tk_int {
+		value = int(negi_lang_tk_value(ti))
+		ti++
+		return negi_lang_ex_add_int(ex_int, value)
+	}
+	if kind == tk_ident {
+		value = str(negi_lang_tk_value(ti))
+		ti++
+		return negi_lang_ex_add_str(ex_ident, value)
+	}
+
+	logmes "PARSE ERROR"
+	return 0
+
+#defcfunc negi_lang_parse_ex var ti
+	return negi_lang_parse_atom(ti)
+
+#deffunc negi_lang_parse \
+	local ex_id, local ti
+
+	assert g_ex_count == 0
+
+	ex_id = negi_lang_ex_add_str(ex_err, "NOT AN EXPRESSION")
+	assert ex_id == 0
+
+	ti = 0
+	ex_id = negi_lang_parse_ex(ti)
+	return
+
+// -----------------------------------------------
+// 評価
+// -----------------------------------------------
+
+#deffunc negi_lang_eval
+	assert g_ex_count != 0
+
+	g_eval_exit = g_ex_ints(1)
+	return
+
+// -----------------------------------------------
+// ソースコードの実行
+// -----------------------------------------------
+
+#deffunc negi_lang_eval_src str src, var out_exit_code
+	negi_lang_begin src
+	negi_lang_tokenize
+	negi_lang_parse
+	negi_lang_eval
+	out_exit_code = g_eval_exit
+	return
+
+#global

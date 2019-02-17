@@ -1,0 +1,50 @@
+// Test negi-lang processor.
+
+#runtime "hsp3utf"
+
+#include "negi_lang.hsp"
+
+#module m_negi_lang_tests
+
+#deffunc negi_lang_tests_begin
+	g_pass = 0
+	g_fail = 0
+	return
+
+#deffunc eval_tests str name, str src, str x_out, int x_exit, \
+	local a_exit
+
+	logmes "[TEST] " + name
+
+	negi_lang_eval_src src, a_exit
+	if a_exit != x_exit {
+		logmes "Difference exit code"
+		logmes "  Expected = " + str(x_exit)
+		logmes "  Actual = " + str(a_exit)
+		g_fail++
+		return
+	}
+
+	g_pass++
+	return
+
+#deffunc main \
+	local status
+
+	eval_tests "zero exit code", "0", "", 0
+	eval_tests "non-zero exit code", "42", "", 42
+
+	if g_pass == 0 || g_fail > 0 {
+		status = "fail"
+	} else {
+		status = "pass"
+	}
+
+	mes "pass " + g_pass
+	mes "fail " + g_fail
+	mes "status " + status
+	return
+
+#global
+
+	main
