@@ -22,6 +22,9 @@
 // 整数を表すトークン
 #enum tk_int
 
+// 文字列を表すトークン
+#enum tk_str
+
 // 識別子を表すトークン
 #enum tk_ident
 
@@ -40,6 +43,7 @@
 
 #enum ex_err = 0
 #enum ex_int
+#enum ex_str
 #enum ex_ident
 #enum ex_op
 
@@ -74,6 +78,14 @@
 #enum op_level_cmp = op_level_top // comparison
 #enum op_level_add // additive
 #enum op_level_mul // multitive
+
+// -----------------------------------------------
+// 値の型タグ
+// -----------------------------------------------
+
+#enum ty_err = 0
+#enum ty_int
+#enum ty_str
 
 // -----------------------------------------------
 // 文字の種類の判定
@@ -134,6 +146,12 @@
 
 	// プログラム全体からなる式の式番号
 	g_ei_root = ei_none
+
+	// 評価中の値
+	dim g_val_tys
+	dim g_val_ints
+	sdim g_val_strs
+	g_val_count = 0
 
 	// 終了コード
 	g_eval_exit = 0
@@ -241,7 +259,27 @@
 				r++
 			loop
 
-			negi_lang_tk_add tk_int, l ,r
+			negi_lang_tk_add tk_int, l, r
+			continue
+		}
+
+		if c == '"' {
+			r++
+			repeat
+				if r >= g_src_len { break }
+				c = peek(g_src, r)
+
+				if c == '\r' || c == '\n' {
+					break
+				}
+				if c == '"' {
+					r++
+					break
+				}
+				r++
+			loop
+
+			negi_lang_tk_add tk_str, l, r
 			continue
 		}
 
@@ -337,6 +375,25 @@
 	g_ex_rs(ei) = r
 	return ei
 
+// 文字列リテラルをパースする。
+#defcfunc negi_lang_parse_str var ti, \
+	local text, local text_len
+
+	assert g_tk_kinds(ti) == tk_str
+
+	text = negi_lang_tk_text(ti)
+	text_len = strlen(text)
+	ti++
+
+	assert text_len >= 1 && peek(text, 0) == '"'
+	// クオーテーションで終わってないことがあるので注意。
+	if peek(text, text_len - 1) == '"' {
+		text_len--
+	}
+	// リテラルの中身
+	text = strmid(text, 1, text_len - 1)
+	return negi_lang_ex_add_str(ex_str, text)
+
 // アトム式 (1つのトークンからなる式) をパースする。
 #defcfunc negi_lang_parse_atom var ti, \
 	local value
@@ -345,6 +402,9 @@
 		value = int(negi_lang_tk_text(ti))
 		ti++
 		return negi_lang_ex_add_int(ex_int, value)
+	}
+	if g_tk_kinds(ti) == tk_str {
+		return negi_lang_parse_str(ti)
 	}
 	if g_tk_kinds(ti) == tk_ident {
 		value = negi_lang_tk_text(ti)
@@ -461,6 +521,33 @@
 // 評価
 // -----------------------------------------------
 
+#defcfunc negi_lang_val_add int ty
+	g_val_tys(g_val_count) = ty
+	g_val_ints(g_val_count) = 0
+	g_val_strs(g_val_count) = ""
+	g_val_count++
+	return g_val_count - 1
+
+#defcfunc negi_lang_val_add_bool int value
+	if value == false {
+		return negi_lang_val_add_int(false)
+	}
+	return negi_lang_val_add_int(true)
+
+#defcfunc negi_lang_val_add_int int value, \
+	local vi
+
+	vi = negi_lang_val_add(ty_int)
+	g_val_ints(vi) = value
+	return vi
+
+#defcfunc negi_lang_val_add_str str value, \
+	local vi
+
+	vi = negi_lang_val_add(ty_str)
+	g_val_strs(vi) = value
+	return vi
+
 // 構文エラーを実行時エラーとして報告する。
 #deffunc negi_lang_eval_verify_syntax \
 	local ok, local ei, local ti
@@ -482,52 +569,115 @@
 
 // 2項演算の式を計算する。
 #defcfunc negi_lang_eval_ex_op int ei, \
-	local op, local el, local er
+	local op, local vl, local vr, local ty
 
 	op = g_ex_ints(ei)
-	el = negi_lang_eval_ex(g_ex_ls(ei))
-	er = negi_lang_eval_ex(g_ex_rs(ei))
+	vl = negi_lang_eval_ex(g_ex_ls(ei))
+	vr = negi_lang_eval_ex(g_ex_rs(ei))
+	ty = g_val_tys(vl)
+
+	if ty != g_val_tys(vr) {
+		failwith "type error: operands are of different types"
+	}
 
 	if op == op_eq {
-		return el == er
+		if ty == ty_int {
+			return negi_lang_val_add_bool(g_val_ints(vl) == g_val_ints(vr))
+		}
+		if ty == ty_str {
+			return negi_lang_val_add_bool(g_val_strs(vl) == g_val_strs(vr))
+		}
+		failwith "type error"
 	}
 	if op == op_ne {
-		return el != er
+		if ty == ty_int {
+			return negi_lang_val_add_bool(g_val_ints(vl) != g_val_ints(vr))
+		}
+		if ty == ty_str {
+			return negi_lang_val_add_bool(g_val_strs(vl) != g_val_strs(vr))
+		}
+		failwith "type error"
 	}
 	if op == op_lt {
-		return el < er
+		if ty == ty_int {
+			return negi_lang_val_add_bool(g_val_ints(vl) < g_val_ints(vr))
+		}
+		if ty == ty_str {
+			return negi_lang_val_add_bool((g_val_strs(vl) != g_val_strs(vr)) < 0)
+		}
+		failwith "type error"
 	}
 	if op == op_le {
-		return el <= er
+		if ty == ty_int {
+			return negi_lang_val_add_bool(g_val_ints(vl) <= g_val_ints(vr))
+		}
+		if ty == ty_str {
+			return negi_lang_val_add_bool((g_val_strs(vl) != g_val_strs(vr)) <= 0)
+		}
+		failwith "type error"
 	}
 	if op == op_gt {
-		return el > er
+		if ty == ty_int {
+			return negi_lang_val_add_bool(g_val_ints(vl) > g_val_ints(vr))
+		}
+		if ty == ty_str {
+			return negi_lang_val_add_bool((g_val_strs(vl) != g_val_strs(vr)) > 0)
+		}
+		failwith "type error"
 	}
 	if op == op_gt {
-		return el >= er
+		if ty == ty_int {
+			return negi_lang_val_add_bool(g_val_ints(vl) >= g_val_ints(vr))
+		}
+		if ty == ty_str {
+			return negi_lang_val_add_bool((g_val_strs(vl) != g_val_strs(vr)) >= 0)
+		}
+		failwith "type error"
 	}
 	if op == op_add {
-		return el + er
+		if ty == ty_int {
+			return negi_lang_val_add_int(g_val_ints(vl) + g_val_ints(vr))
+		}
+		if ty == ty_str {
+			return negi_lang_val_add_str(g_val_strs(vl) + g_val_strs(vr))
+		}
+		failwith "type error"
 	}
 	if op == op_sub {
-		return el - er
+		if ty == ty_int {
+			return negi_lang_val_add_int(g_val_ints(vl) - g_val_ints(vr))
+		}
+		failwith "type error"
 	}
 	if op == op_mul {
-		return el * er
+		if ty == ty_int {
+			return negi_lang_val_add_int(g_val_ints(vl) * g_val_ints(vr))
+		}
+		failwith "type error"
 	}
 	if op == op_div {
-		return el / er
+		if ty == ty_int {
+			return negi_lang_val_add_int(g_val_ints(vl) / g_val_ints(vr))
+		}
+		failwith "type error"
 	}
 	if op == op_mod {
-		return el \ er
+		if ty == ty_int {
+			return negi_lang_val_add_int(g_val_ints(vl) \ g_val_ints(vr))
+		}
+		failwith "type error"
 	}
+
 	logmes "op = " + op
 	failwith "Unknown op"
 
 #defcfunc negi_lang_eval_ex int ei
 
 	if g_ex_kinds(ei) == ex_int {
-		return g_ex_ints(ei)
+		return negi_lang_val_add_int(g_ex_ints(ei))
+	}
+	if g_ex_kinds(ei) == ex_str {
+		return negi_lang_val_add_str(g_ex_strs(ei))
 	}
 	if g_ex_kinds(ei) == ex_op {
 		return negi_lang_eval_ex_op(ei)
@@ -539,7 +689,8 @@
 	logmes "ex_kind = " + g_ex_kinds(ei)
 	failwith "Unknown expression kind"
 
-#deffunc negi_lang_eval
+#deffunc negi_lang_eval \
+	local vi
 
 	assert g_ei_root != ei_none
 
@@ -549,7 +700,11 @@
 		return
 	}
 
-	g_eval_exit = negi_lang_eval_ex(g_ei_root)
+	vi = negi_lang_eval_ex(g_ei_root)
+	if g_val_tys(vi) != ty_int {
+		failwith "type error: the program should return an integer"
+	}
+	g_eval_exit = g_val_ints(vi)
 	return
 
 // -----------------------------------------------
