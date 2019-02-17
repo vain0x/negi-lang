@@ -17,3 +17,9 @@
     - リンク先に書かれているように、hspc をインストールする。
     - パッケージの設定から hspc の絶対パスを設定する。
 - [linter-hsp3](https://github.com/honobonosun/linter-hsp3)
+
+## 開発メモ
+
+### テスト
+
+`neig_lang_tests.hsp` を実行して `status pass` が出たらOK。

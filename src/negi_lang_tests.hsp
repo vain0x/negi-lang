@@ -6,12 +6,26 @@
 
 #module m_negi_lang_tests
 
-#deffunc negi_lang_tests_begin
+#deffunc test_begin
 	g_pass = 0
 	g_fail = 0
 	return
 
-#deffunc eval_tests str name, str src, str x_out, int x_exit, \
+#deffunc test_end \
+	local status
+	
+	if g_pass == 0 || g_fail > 0 {
+		status = "fail"
+	} else {
+		status = "pass"
+	}
+
+	mes "pass " + g_pass
+	mes "fail " + g_fail
+	mes "status " + status
+	return
+
+#deffunc eval_test str name, str src, str x_out, int x_exit, \
 	local a_exit
 
 	logmes "[TEST] " + name
@@ -28,23 +42,16 @@
 	g_pass++
 	return
 
-#deffunc main \
-	local status
+#deffunc main
 
-	eval_tests "zero exit code", "0", "", 0
-	eval_tests "non-zero exit code", "42", "", 42
-	eval_tests "add", "2 + 3", "", 5
-	eval_tests "add and sub", "7 - 2 + 3", "", 8
+	test_begin
 
-	if g_pass == 0 || g_fail > 0 {
-		status = "fail"
-	} else {
-		status = "pass"
-	}
+	eval_test "zero exit code", "0", "", 0
+	eval_test "non-zero exit code", "42", "", 42
+	eval_test "add", "2 + 3", "", 5
+	eval_test "add and sub", "7 - 2 + 3", "", 8
 
-	mes "pass " + g_pass
-	mes "fail " + g_fail
-	mes "status " + status
+	test_end
 	return
 
 #global
