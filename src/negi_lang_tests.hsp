@@ -6,6 +6,9 @@
 
 #module m_negi_lang_tests
 
+#const true 1
+#const false 0
+
 #deffunc test_begin
 	g_pass = 0
 	g_fail = 0
@@ -25,16 +28,70 @@
 	mes "status " + status
 	return
 
-#deffunc eval_test str name, str src, str x_out, int x_exit, \
-	local a_exit
+// 2つの文字列を空白や改行の違いを無視して比較する。
+#defcfunc strings_are_roughly_equal var actual, var expected, \
+	local equal, local c, local a_len, local x_len, local ai, local xi
+
+	equal = true
+	a_len = strlen(actual)
+	x_len = strlen(expected)
+	repeat
+		if ai >= a_len && xi >= x_len {
+			break
+		}
+		if ai < a_len {
+			c = peek(actual, ai)
+			if c == ' ' || c == '\r' || c == '\n' {
+				ai++
+				continue
+			}
+		}
+		if xi < x_len {
+			c = peek(expected, xi)
+			if c == ' ' || c == '\r' || c== '\n' {
+				xi++
+				continue
+			}
+		}
+		if ai < a_len && xi < x_len {
+			if peek(actual, ai) == peek(expected, xi) {
+				ai++
+				xi++
+				continue
+			}
+		}
+		logmes strf("differ at ai=%d, xi=%d", ai, xi)
+		equal = false
+		break
+	loop
+	return equal
+
+#deffunc eval_test str name, str src, str x_text_str, int x_exit, \
+	local a_text, local x_text, local a_exit
 
 	logmes "[TEST] " + name
 
 	negi_lang_eval_src src, a_exit
+
 	if a_exit != x_exit {
-		logmes "Difference exit code"
+		logmes "Unexpected exit code:"
 		logmes "  Expected = " + str(x_exit)
 		logmes "  Actual = " + str(a_exit)
+		g_fail++
+		return
+	}
+
+	if a_exit != 0 {
+		negi_lang_err_summary a_text
+	} else {
+		a_text = ""
+	}
+
+	x_text = x_text_str
+	if strings_are_roughly_equal(a_text, x_text) == false {
+		logmes "Unexpected output:"
+		logmes "  Expected = " + x_text
+		logmes "  Actual = " + a_text
 		g_fail++
 		return
 	}
@@ -52,6 +109,11 @@
 	eval_test "add", "2 + 3", "", 5
 	eval_test "add and sub", "7 - 2 + 3", "", 8
 	eval_test "add and mul", "21 / 5 * 2 + 7 % 3", "", 21 / 5 * 2 + 7 \ 3
+
+	eval_test "syntax err", "1 + + 2", {"
+		1:5..1:6 near '+'
+			Expected an expression
+	"}, 1
 
 	test_end
 	return

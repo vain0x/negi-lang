@@ -129,6 +129,57 @@
 
 	// 終了コード
 	g_eval_exit = 0
+
+	// エラー
+	// l, r: エラーが起こっているソースコード上の位置
+	sdim g_err_messages
+	dim g_err_ls
+	dim g_err_rs
+	g_err_count = 0
+	return
+
+// -----------------------------------------------
+// エラー
+// -----------------------------------------------
+
+// 指定された位置の行番号 (y) と列番号 (x) を計算する。
+#deffunc negi_lang_find_pos int i, var out_y, var out_x
+	out_y = 0
+	out_x = 0
+	repeat i
+		if peek(g_src, cnt) == '\n' {
+			out_y++
+			out_x = 0
+			continue
+		}
+		out_x++
+	loop
+	return
+
+// エラーの一覧を表す文字列を取得する。
+#deffunc negi_lang_err_summary var buf, \
+	local l, local r, local ly, local lx, local ry, local rx, \
+	local near, local msg
+
+	buf = ""
+	repeat g_err_count
+		l = g_err_ls(ri)
+		r = g_err_rs(ri)
+		negi_lang_find_pos l, ly, lx
+		negi_lang_find_pos r, ry, rx
+
+		near = strmid(g_src, l, r - l)
+		msg = g_err_messages(cnt)
+
+		buf += strf("%d:%d..%d:%d near '%s'\n  %s\n", 1 + ly, 1 + lx, 1 + ry, 1 + rx, near, msg)
+	loop
+	return
+
+#deffunc negi_lang_err_add str message, int l, int r
+	g_err_messages(g_err_count) = message
+	g_err_ls(g_err_count) = l
+	g_err_rs(g_err_count) = r
+ 	g_err_count++
 	return
 
 // -----------------------------------------------
@@ -382,6 +433,25 @@
 // 評価
 // -----------------------------------------------
 
+// 構文エラーを実行時エラーとして報告する。
+#deffunc negi_lang_eval_verify_syntax \
+	local ok, local ei, local ti
+
+	ok = true
+	repeat g_ex_count
+		ei = cnt
+		if ei == ei_none {
+			continue
+		}
+		if g_ex_kinds(ei) == ex_err {
+			ti = g_ex_ints(ei)
+			negi_lang_err_add g_ex_strs(ei), g_tk_ls(ei), g_tk_rs(ei)
+			ok = false
+			break
+		}
+	loop
+	return ok
+
 // 2項演算の式を計算する。
 #defcfunc negi_lang_eval_ex_op int ei, \
 	local op, local el, local er
@@ -424,7 +494,14 @@
 	failwith "Unknown expression kind"
 
 #deffunc negi_lang_eval
+
 	assert g_ei_root != ei_none
+
+	negi_lang_eval_verify_syntax
+	if g_err_count != 0 {
+		g_eval_exit = 1
+		return
+	}
 
 	g_eval_exit = negi_lang_eval_ex(g_ei_root)
 	return
