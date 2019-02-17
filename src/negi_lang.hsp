@@ -31,6 +31,9 @@
 // 右カッコ
 #enum tk_paren_r
 
+// +
+#enum tk_add
+
 // -----------------------------------------------
 // 式の種類
 // -----------------------------------------------
@@ -38,7 +41,20 @@
 #enum ex_err = 0
 #enum ex_int
 #enum ex_ident
-#enum ex_call
+#enum ex_op
+
+// -----------------------------------------------
+// 無効な式番号
+// -----------------------------------------------
+
+#const ex_id_none 0
+
+// -----------------------------------------------
+// 演算子の種類
+// -----------------------------------------------
+
+#enum op_err = 0
+#enum op_add
 
 // -----------------------------------------------
 // 文字の種類の判定
@@ -57,9 +73,9 @@
 // 致命的なエラー
 // -----------------------------------------------
 
-#define fatal(%1) \
+#define failwith(%1) \
 	dialog "FATAL ERROR: " + str(%1) + " \nFILE: " + __FILE__ + "\nLINE: " + __LINE__, 1, "negi-lang" :\
-	exit 1
+	end 1
 
 // -----------------------------------------------
 // 初期化
@@ -82,7 +98,10 @@
 	// 式のリスト
 	// kind: 種類
 	// int: 式に関連する整数値
+	// l, r: 式の左辺と右辺を指す式番号
 	dim g_ex_kinds
+	dim g_ex_ls
+	dim g_ex_rs
 	dim g_ex_ints
 	sdim g_ex_strs
 	g_ex_count = 0
@@ -120,19 +139,21 @@
 	repeat
 		l = r
 
-		if r >= g_src_len {
+		if l >= g_src_len {
 			negi_lang_tk_add tk_eof, l, r
 			break
 		}
 
+		// 次の文字を変数に入れておく。(先読み)
 		c = peek(g_src, l)
 
+		// 空白と改行は無視する。
 		if c == ' ' || c == '\t' || c == '\r' || c == '\n' {
 			r++
 			continue
 		}
 
-		if c == '+' || c == '-' || is_digit(c) {
+		if is_digit(c) {
 			r++
 			repeat
 				if r >= g_src_len { break }
@@ -170,6 +191,13 @@
 			continue
 		}
 
+		if c == '+' {
+			r++
+			negi_lang_tk_add tk_add, l, r
+			continue
+		}
+
+		// 不明な文字
 		r++
 		negi_lang_tk_add tk_err, l, r
 	loop
@@ -181,65 +209,124 @@
 // 構文解析
 // -----------------------------------------------
 
-#defcfunc negi_lang_ex_add_int int kind, int value
+#defcfunc negi_lang_ex_add int kind
 	g_ex_kinds(g_ex_count) = kind
-	g_ex_ints(g_ex_count) = value
+	g_ex_ls(g_ex_count) = ex_id_none
+	g_ex_rs(g_ex_count) = ex_id_none
+	g_ex_ints(g_ex_count) = 0
 	g_ex_strs(g_ex_count) = ""
 	g_ex_count++
 	return g_ex_count - 1
 
-#defcfunc negi_lang_ex_add_str int kind, str value
-	g_ex_kinds(g_ex_count) = kind
-	g_ex_ints(g_ex_count) = 0
-	g_ex_strs(g_ex_count) = value
-	g_ex_count++
-	return g_ex_count - 1
+#defcfunc negi_lang_ex_add_int int kind, int value, \
+	local ei
+
+	ei = negi_lang_ex_add(kind)
+	g_ex_ints(ei) = value
+	return ei
+
+#defcfunc negi_lang_ex_add_str int kind, str value, \
+	local ei
+
+	ei = negi_lang_ex_add(kind)
+	g_ex_strs(ei) = value
+	return ei
+
+#defcfunc negi_lang_ex_add_err int ti, str message, \
+	local ei
+
+	ei = negi_lang_ex_add(ex_err)
+	g_ex_ints(ei) = ti
+	g_ex_strs(ei) = message
+	return ei
+
+#defcfunc negi_lang_ex_add_bin int op, int l, int r, \
+	local ei
+
+	ei = negi_lang_ex_add(ex_op)
+	g_ex_ints(ei) = op
+	g_ex_ls(ei) = l
+	g_ex_rs(ei) = r
+	return ei
 
 #defcfunc negi_lang_parse_atom var ti, \
-	local kind, local value
+	local value
 
-	kind = g_tk_kinds(ti)
-
-	if kind == tk_eof {
-		return negi_lang_ex_add_str(ex_err, "UNEXPECTED EOF")
-	}
-	if kind == tk_int {
+	if g_tk_kinds(ti) == tk_int {
 		value = int(negi_lang_tk_value(ti))
 		ti++
 		return negi_lang_ex_add_int(ex_int, value)
 	}
-	if kind == tk_ident {
-		value = str(negi_lang_tk_value(ti))
+	if g_tk_kinds(ti) == tk_ident {
+		value = negi_lang_tk_value(ti)
 		ti++
 		return negi_lang_ex_add_str(ex_ident, value)
 	}
+	return negi_lang_ex_add_err(ti, "Expected an expression")
 
-	logmes "PARSE ERROR"
-	return 0
+#defcfunc negi_lang_parse_additive var ti, \
+	local l, local r
+
+	l = negi_lang_parse_atom(ti)
+
+	repeat
+		if g_tk_kinds(ti) == tk_add {
+			ti++
+			r = negi_lang_parse_atom(ti)
+			l = negi_lang_ex_add_bin(op_add, l, r)
+			continue
+		}
+		break
+	loop
+	return l
 
 #defcfunc negi_lang_parse_ex var ti
-	return negi_lang_parse_atom(ti)
+	return negi_lang_parse_additive(ti)
 
 #deffunc negi_lang_parse \
-	local ex_id, local ti
+	local ei, local ti
 
 	assert g_ex_count == 0
 
-	ex_id = negi_lang_ex_add_str(ex_err, "NOT AN EXPRESSION")
-	assert ex_id == 0
+	// 式番号 ex_id_none を無効な式を表すものとして登録する。
+	ei = negi_lang_ex_add_err(0, "NOT AN EXPRESSION")
+	assert ei == ex_id_none
 
 	ti = 0
-	ex_id = negi_lang_parse_ex(ti)
+	ei = negi_lang_parse_ex(ti)
 	return
 
 // -----------------------------------------------
 // 評価
 // -----------------------------------------------
 
+#defcfunc negi_lang_eval_ex_op int ei, \
+	local op, local el, local er
+
+	op = g_ex_ints(ei)
+	el = negi_lang_eval_ex(g_ex_ls(ei))
+	er = negi_lang_eval_ex(g_ex_rs(ei))
+
+	if op == op_add {
+		return el + er
+	}
+	logmes "op = " + op
+	failwith "Unknown op"
+
+#defcfunc negi_lang_eval_ex int ei
+
+	if g_ex_kinds(ei) == ex_int {
+		return g_ex_ints(ei)
+	}
+	if g_ex_kinds(ei) == ex_op {
+		return negi_lang_eval_ex_op(ei)
+	}
+	return
+
 #deffunc negi_lang_eval
 	assert g_ex_count != 0
 
-	g_eval_exit = g_ex_ints(1)
+	g_eval_exit = negi_lang_eval_ex(g_ex_count - 1)
 	return
 
 // -----------------------------------------------

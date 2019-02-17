@@ -33,6 +33,7 @@
 
 	eval_tests "zero exit code", "0", "", 0
 	eval_tests "non-zero exit code", "42", "", 42
+	eval_tests "add", "2 + 3", "", 5
 
 	if g_pass == 0 || g_fail > 0 {
 		status = "fail"
