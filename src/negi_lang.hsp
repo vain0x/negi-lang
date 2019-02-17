@@ -124,6 +124,9 @@
 	sdim g_ex_strs
 	g_ex_count = 0
 
+	// プログラム全体からなる式の式番号
+	g_ei_root = ei_none
+
 	// 終了コード
 	g_eval_exit = 0
 	return
@@ -367,7 +370,8 @@
 	assert ei == ei_none
 
 	ti = 0
-	ei = negi_lang_parse_ex(ti)
+	g_ei_root = negi_lang_parse_ex(ti)
+	assert g_ei_root != ei_none
 	return
 
 // -----------------------------------------------
@@ -411,9 +415,9 @@
 	return
 
 #deffunc negi_lang_eval
-	assert g_ex_count != 0
+	assert g_ei_root != ei_none
 
-	g_eval_exit = negi_lang_eval_ex(g_ex_count - 1)
+	g_eval_exit = negi_lang_eval_ex(g_ei_root)
 	return
 
 // -----------------------------------------------
