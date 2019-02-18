@@ -1,4 +1,7 @@
-// Test negi-lang processor.
+// ネギ言語処理系のテスト
+
+// このスクリプトは、ネギ言語のプログラムをいくつか実行して、その結果が期待通りであるかをチェックする。
+// すべての結果が期待通りなら、たぶん処理系は正しいだろう、ということで安心できる。
 
 #runtime "hsp3utf"
 
@@ -18,14 +21,14 @@
 	local status
 
 	if g_pass == 0 || g_fail > 0 {
-		status = "fail"
+		status = "失敗 (詳細はデバッグログを参照)"
 	} else {
-		status = "pass"
+		status = "成功"
 	}
 
-	mes "pass " + g_pass
-	mes "fail " + g_fail
-	mes "status " + status
+	mes "成功数 " + g_pass
+	mes "失敗数 " + g_fail
+	mes "結果 " + status
 	return
 
 // 2つの文字列を空白や改行の違いを無視して比較する。
@@ -74,9 +77,9 @@
 	negi_lang_eval_src src, a_exit
 
 	if a_exit != x_exit {
-		logmes "Unexpected exit code:"
-		logmes "  Expected = " + str(x_exit)
-		logmes "  Actual = " + str(a_exit)
+		logmes "終了コードが異なります:"
+		logmes "  期待 = " + str(x_exit)
+		logmes "  実際 = " + str(a_exit)
 		g_fail++
 		return
 	}
@@ -89,9 +92,9 @@
 
 	x_text = x_text_str
 	if strings_are_roughly_equal(a_text, x_text) == false {
-		logmes "Unexpected output:"
-		logmes "  Expected = " + x_text
-		logmes "  Actual = " + a_text
+		logmes "出力が異なります:"
+		logmes "  期待 = " + x_text
+		logmes "  実際 = " + a_text
 		g_fail++
 		return
 	}
@@ -103,24 +106,28 @@
 
 	test_begin
 
-	eval_test "empty", "", "", 0
-	eval_test "zero exit code", "0", "", 0
-	eval_test "non-zero exit code", "42", "", 42
-	eval_test "add", "2 + 3", "", 5
-	eval_test "add and sub", "7 - 2 + 3", "", 8
-	eval_test "add and mul", "21 / 5 * 2 + 7 % 3", "", 21 / 5 * 2 + 7 \ 3
-	eval_test "comparison eq true", "1 == 1", "", 1
-	eval_test "comparison eq false", "1 == 2", "", 0
-	eval_test "comparison lt true", "1 < 2", "", 1
-	eval_test "comparison lt false", "1 < 1", "", 0
-	eval_test "comparison le true", "1 <= 1", "", 1
-	eval_test "comparison le false", "3 <= 2", "", 0
+	eval_test "空のプログラムは何もせず正常終了する", "", "", 0
+	eval_test "終了コードをゼロにできる", "0", "", 0
+	eval_test "終了コードを非ゼロにできる", "42", "", 42
+
+	eval_test "加算ができる", "2 + 3", "", 5
+	eval_test "加算と減算ができる", "7 - 2 + 3", "", 8
+	eval_test "加算や乗算などができる", "21 / 5 * 2 + 7 % 3", "", 21 / 5 * 2 + 7 \ 3
+	eval_test "比較 == true", "1 == 1", "", 1
+	eval_test "比較 == false", "1 == 2", "", 0
+	eval_test "比較 < true", "1 < 2", "", 1
+	eval_test "比較 < false", "1 < 1", "", 0
+	eval_test "比較 <= true", "1 <= 1", "", 1
+	eval_test "比較 <= false", "3 <= 2", "", 0
+
+	eval_test "比較 文字列の等号否定 true", {" "b" != "a" "}, "", 1
+	eval_test "文字列の加算と比較", {"
+		"hello, " + "world" == "hello, world"
+	"}, "", 1
+
 	eval_test "カッコを含む式", "3 * (1 + (4 - 1))", "", 3 * (1 + (4 - 1))
 
-	eval_test "string ne true", {" "b" != "a" "}, "", 1
-	eval_test "string concat", {" "hello, " + "world" == "hello, world" "}, "", 1
-
-	eval_test "syntax err", "1 + + 2", {"
+	eval_test "構文エラー", "1 + + 2", {"
 		1:5..1:6 near '+'
 			Expected an expression
 	"}, 1

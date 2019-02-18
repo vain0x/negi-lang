@@ -23,4 +23,4 @@
 
 ### テスト
 
-`neig_lang_tests.hsp` を実行して `status pass` が出たらOK。
+`negi_lang_tests.hsp` を実行して `結果 成功` が出たらOK。
