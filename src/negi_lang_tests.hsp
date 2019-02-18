@@ -113,6 +113,8 @@
 	eval_test "comparison eq false", "1 == 2", "", 0
 	eval_test "comparison lt true", "1 < 2", "", 1
 	eval_test "comparison lt false", "1 < 1", "", 0
+	eval_test "comparison le true", "1 <= 1", "", 1
+	eval_test "comparison le false", "3 <= 2", "", 0
 
 	eval_test "string ne true", {" "b" != "a" "}, "", 1
 	eval_test "string concat", {" "hello, " + "world" == "hello, world" "}, "", 1
