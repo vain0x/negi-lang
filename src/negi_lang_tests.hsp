@@ -123,6 +123,10 @@
 		1:5..1:6 near '+'
 			Expected an expression
 	"}, 1
+	eval_test "終了コードが整数でなければエラー", {" "a" "}, {"
+		1:6..1:6 near ''
+  			計算結果は整数値でなければいけません。
+	"}, 1
 
 	test_end
 	return

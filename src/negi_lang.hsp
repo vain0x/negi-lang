@@ -849,7 +849,7 @@
 		if g_in_kinds(ii) == in_exit {
 			negi_lang_stack_pop ty, g_eval_exit
 			if ty != ty_int {
-				negi_lang_eval_abort "Expected an integer as exit code", g_in_tis(ii)
+				negi_lang_eval_abort "計算結果は整数値でなければいけません。", g_in_tis(ii)
 				continue
 			}
 			break
