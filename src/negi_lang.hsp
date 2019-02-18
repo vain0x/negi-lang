@@ -69,7 +69,6 @@
 #enum op_mul // * (multiplication)
 #enum op_div // / (division)
 #enum op_mod // % (modulo)
-#enum op_neg // ! (negation)
 
 // -----------------------------------------------
 // 演算子のレベルの種類
@@ -589,12 +588,18 @@
 	g_in_strs(g_in_count - 1) = value
 	return
 
+// スタックの一番上の真理値の否定をとる。(!x ---> x == false)
+#deffunc negi_lang_in_add_negate int ti
+
+	negi_lang_in_add_int in_push_int, false, ti
+	negi_lang_in_add_int in_op, op_eq, ti
+	return
+
 #deffunc negi_lang_gen_ex_op int ei, \
 	local op
 
 	assert g_ex_kinds(ei) == ex_op
 	op = g_ex_ints(ei)
-	assert op != op_neg // neg is unimplemented
 
 	negi_lang_gen_ex g_ex_ls(ei)
 	negi_lang_gen_ex g_ex_rs(ei)
@@ -602,14 +607,14 @@
 	if op == op_ne {
 		// l != r ---> !(l == r)
 		negi_lang_in_add_int in_op, op_eq, g_ex_tis(ei)
-		negi_lang_in_add_int in_op, op_neg, g_ex_tis(ei)
+		negi_lang_in_add_negate g_ex_tis(ei)
 		return
 	}
 	if op == op_le {
 		// l <= r ---> !(r < l)
 		negi_lang_in_add in_swap, g_ex_tis(ei)
 		negi_lang_in_add_int in_op, op_lt, g_ex_tis(ei)
-		negi_lang_in_add_int in_op, op_neg, g_ex_tis(ei)
+		negi_lang_in_add_negate g_ex_tis(ei)
 		return
 	}
 	if op == op_gt {
@@ -621,7 +626,7 @@
 	if op == op_ge {
 		// l >= r ---> !(l < r)
 		negi_lang_in_add_int in_op, op_lt, g_ex_tis(ei)
-		negi_lang_in_add_int in_op, op_neg, g_ex_tis(ei)
+		negi_lang_in_add_negate g_ex_tis(ei)
 		return
 	}
 
@@ -727,16 +732,6 @@
 
 	assert g_in_kinds(ii) == in_op
 	op = g_in_xs(ii)
-
-	if op == op_neg {
-		negi_lang_stack_pop ty, val_l
-		if ty != ty_int {
-			negi_lang_eval_abort "type error", g_in_tis(ii)
-			return
-		}
-		negi_lang_stack_push ty_int, val_l == false
-		return
-	}
 
 	negi_lang_stack_pop ty_r, val_r
 	negi_lang_stack_pop ty, val_l
