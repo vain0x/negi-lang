@@ -16,6 +16,7 @@
 - [language-hsp3](https://github.com/honobonosun/language-hsp3)
     - リンク先に書かれているように、hspc をインストールする。
     - パッケージの設定から hspc の絶対パスを設定する。
+    - コンパイラ引数に `-a` を指定する。例: `-Crdwa, %FILEPATH%`
 - [linter-hsp3](https://github.com/honobonosun/linter-hsp3)
 
 ## 開発メモ
