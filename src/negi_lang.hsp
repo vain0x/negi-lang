@@ -438,9 +438,9 @@
 	ti++
 	return ei
 
-// アトム式 (1つのトークンからなる式) をパースする。
+// アトム式 (分解できない式) をパースする。
 #defcfunc negi_lang_parse_atom var ti, \
-	local value, local ei
+	local value, local ei, local initial_ti
 
 	if g_tk_kinds(ti) == tk_int {
 		value = int(negi_lang_tk_text(ti))
@@ -454,6 +454,15 @@
 	if g_tk_kinds(ti) == tk_ident {
 		value = negi_lang_tk_text(ti)
 		ei = negi_lang_ex_add_str(ex_ident, value, ti)
+		ti++
+		return ei
+	}
+	if g_tk_kinds(ti) == tk_paren_l {
+		ti++
+		ei = negi_lang_parse_ex(ti)
+		if g_tk_kinds(ti) != tk_paren_r {
+			return negi_lang_ex_add_err("右カッコが必要です。", ti)
+		}
 		ti++
 		return ei
 	}
