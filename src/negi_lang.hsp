@@ -2,12 +2,30 @@
 
 #module m_negi_lang
 
+// ###############################################
+// 汎用
+// ###############################################
+
 // -----------------------------------------------
 // 真理値
 // -----------------------------------------------
 
 #const true 1
 #const false 0
+
+// -----------------------------------------------
+// 致命的なエラー
+// -----------------------------------------------
+
+// ネギ言語処理系のバグに起因するエラーを報告して、異常終了する。
+// 入力されたプログラムの問題は、これではなく以下にある「エラー」の仕組みを使って報告する。
+#define failwith(%1) \
+	dialog "FATAL ERROR: " + str(%1) + " \nFILE: " + __FILE__ + "\nLINE: " + __LINE__, 1, "negi-lang" :\
+	end 1
+
+// ###############################################
+// 定数
+// ###############################################
 
 // -----------------------------------------------
 // トークンの種類
@@ -113,39 +131,14 @@
 // 文字列。値は g_heap_strs の要素番号。
 #enum ty_str
 
-// -----------------------------------------------
-// 文字の種類の判定
-// -----------------------------------------------
+// ###############################################
+// 変数
+// ###############################################
 
-// 数字
-#define ctype is_digit(%1) ('0' <= (%1) && (%1) <= '9')
-
-// アルファベット
-#define ctype is_alphabet(%1) (('a' <= (%1) && (%1) <= 'z') || ('A' <= (%1) && (%1) <= 'Z'))
-
-// 識別子に使える文字
-#define ctype is_ident_char(%1) (is_digit(%1) || is_alphabet(%1) || (%1) == '_')
-
-// 演算子に使える文字
-#define ctype is_op_char(%1) \
-	((%1) == '+' || (%1) == '-' || (%1) == '*' || (%1) == '/' || (%1) == '%%' \
-	|| (%1) == '&' || (%1) == '|' || (%1) == '^' || (%1) == '~' || (%1) == '!' \
-	|| (%1) == '=' || (%1) == '<' || (%1) == '>' || (%1) == ',' || (%1) == ';' \
-	)
-
-// -----------------------------------------------
-// 致命的なエラー
-// -----------------------------------------------
-
-#define failwith(%1) \
-	dialog "FATAL ERROR: " + str(%1) + " \nFILE: " + __FILE__ + "\nLINE: " + __LINE__, 1, "negi-lang" :\
-	end 1
-
-// -----------------------------------------------
-// 初期化
-// -----------------------------------------------
-
+// モジュールの中にある、ローカルでない変数をすべて初期化する。
+// ローカル変数と区別するため、変数の名前には g_ をつける。
 #deffunc negi_lang_begin str src
+
 	// 与えられたソースコード
 	g_src = src
 	g_src_len = strlen(src)
@@ -211,9 +204,12 @@
 	g_err_count = 0
 	return
 
-// -----------------------------------------------
+// ###############################################
 // エラー
-// -----------------------------------------------
+// ###############################################
+
+// 入力されたプログラムの問題は実行時エラーとして報告する。(failwith は使わない。)
+// エラーの報告には、そのエラーが発生した箇所 (ソースコードのどのあたりか) を含める。
 
 // 指定された位置の行番号 (y) と列番号 (x) を計算する。
 #deffunc negi_lang_find_pos int i, var out_y, var out_x
@@ -229,7 +225,7 @@
 	loop
 	return
 
-// エラーの一覧を表す文字列を取得する。
+// エラーの一覧を表す文字列を生成する。
 #deffunc negi_lang_err_summary var buf, \
 	local l, local r, local ly, local lx, local ry, local rx, \
 	local near, local msg
@@ -248,6 +244,8 @@
 	loop
 	return
 
+// 処理中のエラーを追加する。
+// l, r: エラーに関連する、ソースコード上の範囲を表す。
 #deffunc negi_lang_err_add str message, int l, int r
 	g_err_messages(g_err_count) = message
 	g_err_ls(g_err_count) = l
@@ -255,8 +253,38 @@
  	g_err_count++
 	return
 
-// -----------------------------------------------
+// ###############################################
 // 字句解析
+// ###############################################
+
+// ソースコードをトークン (単語や記号などのまとまり) 単位に分割する。
+// この工程により、後続の構文解析がやりやすくなる。
+
+// トークンのリストは tk_eof で終わるようにする。
+// エラーの報告のため、トークンがソースコードのどの位置にあるかを記録しておく。
+
+// -----------------------------------------------
+// 文字の種類の判定
+// -----------------------------------------------
+
+// 数字
+#define ctype is_digit(%1) ('0' <= (%1) && (%1) <= '9')
+
+// アルファベット
+#define ctype is_alphabet(%1) (('a' <= (%1) && (%1) <= 'z') || ('A' <= (%1) && (%1) <= 'Z'))
+
+// 識別子に使える文字
+#define ctype is_ident_char(%1) (is_digit(%1) || is_alphabet(%1) || (%1) == '_')
+
+// 演算子に使える文字
+#define ctype is_op_char(%1) \
+	((%1) == '+' || (%1) == '-' || (%1) == '*' || (%1) == '/' || (%1) == '%%' \
+	|| (%1) == '&' || (%1) == '|' || (%1) == '^' || (%1) == '~' || (%1) == '!' \
+	|| (%1) == '=' || (%1) == '<' || (%1) == '>' || (%1) == ',' || (%1) == ';' \
+	)
+
+// -----------------------------------------------
+// トークンリスト
 // -----------------------------------------------
 
 // ソースコードの位置 l から r までの文字列を種類 kind のトークンとしてリストに追加する。
@@ -276,12 +304,21 @@
 	assert ti < g_tk_count
 	return strmid(g_src, g_tk_ls(ti), g_tk_rs(ti) - g_tk_ls(ti))
 
+// -----------------------------------------------
+// 字句解析
+// -----------------------------------------------
+
 #deffunc negi_lang_tokenize \
 	local c, local l, local r
 
-	assert g_tk_count == 0
+	assert g_tk_count == 0 // 変数が初期化済みであることを確認する。
 
 	repeat
+		// 1回のループで、位置 l から始まる1つのトークンを切り出す。
+		// l の次の文字 c からトークンの種類を特定して、
+		// そのトークンが広がる範囲の右端まで r を進める。
+		// 最終的に、切り出されるトークンは位置 l から r までになるようにする。
+
 		l = r
 
 		if l >= g_src_len {
@@ -369,7 +406,7 @@
 			continue
 		}
 
-		// 不明な文字
+		// このとき、文字 c はトークンとして不正なもの。エラーを表すトークンとして追加する。
 		r++
 		negi_lang_tk_add tk_err, l, r
 	loop
@@ -377,8 +414,14 @@
 	assert r == g_src_len
 	return
 
-// -----------------------------------------------
+// ###############################################
 // 構文解析
+// ###############################################
+
+// トークンのリストに再帰下降構文解析を適用して、抽象構文木を作る。
+
+// -----------------------------------------------
+// 式リスト
 // -----------------------------------------------
 
 // 式を追加して、その式番号を返す。
@@ -392,24 +435,28 @@
 	g_ex_count++
 	return
 
+// 整数値をパラメーターに持つ式を追加する。
 #defcfunc negi_lang_ex_add_int int kind, int value, int ti
 
 	negi_lang_ex_add kind, ti
 	g_ex_ints(g_ex_count - 1) = value
 	return g_ex_count - 1
 
+// 文字列をパラメーターに持つ式を追加する。
 #defcfunc negi_lang_ex_add_str int kind, str value, int ti
 
 	negi_lang_ex_add kind, ti
 	g_ex_strs(g_ex_count - 1) = value
 	return g_ex_count - 1
 
+// エラーを表す式を追加する。
 #defcfunc negi_lang_ex_add_err str message, int ti
 
 	negi_lang_ex_add ex_err, ti
 	g_ex_strs(g_ex_count - 1) = message
 	return g_ex_count - 1
 
+// 2項演算を表す式を追加する。
 #defcfunc negi_lang_ex_add_bin int op, int l, int r, int ti
 
 	negi_lang_ex_add ex_op, ti
@@ -417,6 +464,10 @@
 	g_ex_ls(g_ex_count - 1) = l
 	g_ex_rs(g_ex_count - 1) = r
 	return g_ex_count - 1
+
+// -----------------------------------------------
+// 構文解析
+// -----------------------------------------------
 
 // 文字列リテラルをパースする。
 #defcfunc negi_lang_parse_str var ti, \
@@ -555,6 +606,7 @@
 #defcfunc negi_lang_parse_ex var ti
 	return negi_lang_parse_bin(ti, op_level_top)
 
+// 構文解析を実行する。
 #deffunc negi_lang_parse \
 	local ei, local ti
 
@@ -566,6 +618,7 @@
 
 	ti = 0
 	if g_tk_kinds(ti) == tk_eof {
+		// 空のプログラムは 0 とみなす。
 		g_ei_root = negi_lang_ex_add_int(ex_int, 0, ti)
 	} else {
 		g_ei_root = negi_lang_parse_ex(ti)
@@ -573,10 +626,19 @@
 	assert g_ei_root != ei_none
 	return
 
-// -----------------------------------------------
+// ###############################################
 // コード生成
+// ###############################################
+
+// 抽象構文木を辿って、中間言語の命令リストを生成する。
+// 中間言語はよくあるスタックマシン。
+
+// -----------------------------------------------
+// 命令リスト
 // -----------------------------------------------
 
+// 命令を追加する。
+// ti: この命令と関連するトークン番号
 #deffunc negi_lang_in_add int kind, int ti
 	g_in_kinds(g_in_count) = kind
 	g_in_xs(g_in_count) = 0
@@ -585,25 +647,33 @@
 	g_in_count++
 	return
 
+// 整数値を引数に持つ命令を追加する。
 #deffunc negi_lang_in_add_int int kind, int value, int ti
 
 	negi_lang_in_add kind, ti
 	g_in_xs(g_in_count - 1) = value
 	return
 
+// 文字列を引数に持つ命令を追加する。
 #deffunc negi_lang_in_add_str int kind, str value, int ti
 
 	negi_lang_in_add kind, ti
 	g_in_strs(g_in_count - 1) = value
 	return
 
-// スタックの一番上の真理値の否定をとる。(!x ---> x == false)
+// 否定演算の命令を追加する。 (!x ---> x == false)
 #deffunc negi_lang_in_add_negate int ti
 
 	negi_lang_in_add_int in_push_int, false, ti
 	negi_lang_in_add_int in_op, op_eq, ti
 	return
 
+// -----------------------------------------------
+// コード生成
+// -----------------------------------------------
+
+// 2項演算を行うコードを生成する。
+// 評価の実装を簡単にするため、式を適当に変形する。
 #deffunc negi_lang_gen_ex_op int ei, \
 	local op
 
@@ -642,6 +712,7 @@
 	negi_lang_in_add_int in_op, op, g_ex_tis(ei)
 	return
 
+// 式を計算するコードを生成する。
 #deffunc negi_lang_gen_ex int ei
 
 	if g_ex_kinds(ei) == ex_int {
@@ -663,20 +734,28 @@
 	logmes "ex_kind = " + g_ex_kinds(ei)
 	failwith "unknown expression kind"
 
+// コード生成を実行する。
 #deffunc negi_lang_gen
 
 	assert g_ei_root != ei_none
 
 	negi_lang_gen_ex g_ei_root
 
-	// 最後に実行を正常終了させる。
+	// スタックにある値を終了コードとして終了する命令を末尾に追加する。
 	negi_lang_in_add in_exit, g_tk_count - 1
 	return
+
+// ###############################################
+// 評価
+// ###############################################
+
+// 中間言語のコードを実行して、実際に計算を行う。
 
 // -----------------------------------------------
 // スタック
 // -----------------------------------------------
 
+// スタックに値を積む。
 #deffunc negi_lang_stack_push int ty, int val
 
 	logmes "push ty=" + ty + " val=" + val
@@ -685,6 +764,7 @@
 	g_stack_count++
 	return
 
+// スタックから値を取り出す。
 #deffunc negi_lang_stack_pop var out_ty, var out_val
 
 	assert g_stack_count >= 1
@@ -698,6 +778,7 @@
 // ヒープ
 // -----------------------------------------------
 
+// ヒープに文字列を追加して、その文字列を指す数値を返す。
 #defcfunc negi_lang_heap_str_add str value
 
 	g_heap_strs(g_heap_str_count) = value
@@ -726,6 +807,7 @@
 	negi_lang_eval_abort g_in_strs(ii), g_in_tis(ii)
 	return
 
+// スワップ命令を処理する。スタックの上の2つの要素の順番を入れ替える。
 #deffunc negi_lang_eval_swap int ii, \
 	local val_l, local val_r, local ty_l, local ty_r
 
@@ -828,6 +910,8 @@
 	logmes "op = " + op
 	failwith "Unknown op"
 
+// 評価のメインループ。
+// 終了命令に到達するまで、命令のリストを1つずつ実行する。
 #deffunc negi_lang_eval_main \
 	local ii, local ty
 
@@ -856,6 +940,7 @@
 			continue
 		}
 		if g_in_kinds(ii) == in_exit {
+			// スタックの値を終了コードとする。
 			negi_lang_stack_pop ty, g_eval_exit
 			if ty != ty_int {
 				negi_lang_eval_abort "計算結果は整数値でなければいけません。", g_in_tis(ii)
@@ -876,10 +961,11 @@
 	negi_lang_eval_main
 	return
 
-// -----------------------------------------------
-// ソースコードの実行
-// -----------------------------------------------
+// ###############################################
+// 実行
+// ###############################################
 
+// ソースコードをコンパイル・実行する。
 #deffunc negi_lang_eval_src str src, var out_exit_code
 
 	negi_lang_begin src
