@@ -501,7 +501,7 @@
 
 // アトム式 (分解できない式) をパースする。
 #defcfunc negi_lang_parse_atom var ti, \
-	local value, local ei, local initial_ti
+	local value, local ei, local op_ti
 
 	if g_tk_kinds(ti) == tk_int {
 		value = int(negi_lang_tk_text(ti))
@@ -519,10 +519,11 @@
 		return ei
 	}
 	if g_tk_kinds(ti) == tk_paren_l {
+		op_ti = ti
 		ti++
 		ei = negi_lang_parse_ex(ti)
 		if g_tk_kinds(ti) != tk_paren_r {
-			return negi_lang_ex_add_err("丸カッコが閉じられていません。", ti)
+			return negi_lang_ex_add_err("丸カッコが閉じられていません。", op_ti)
 		}
 		ti++
 		return ei
