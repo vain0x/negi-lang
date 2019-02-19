@@ -545,7 +545,7 @@
 		er = negi_lang_parse_ex(ti)
 
 		if g_tk_kinds(ti) != tk_bracket_r {
-			el = negi_lang_ex_add_err("角カッコが閉じられていません。"), op_ti
+			el = negi_lang_ex_add_err("角カッコが閉じられていません。", op_ti)
 			break
 		}
 		ti++
@@ -757,6 +757,11 @@
 	}
 	if g_ex_kinds(ei) == ex_str {
 		negi_lang_in_add_str in_push_str, g_ex_strs(ei), g_ex_tis(ei)
+		return
+	}
+	if g_ex_kinds(ei) == ex_ident {
+		// FIXME: 変数として処理する
+		negi_lang_in_add_int in_push_int, 0, g_ex_tis(ei)
 		return
 	}
 	if g_ex_kinds(ei) == ex_op {

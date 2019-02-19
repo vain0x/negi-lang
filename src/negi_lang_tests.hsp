@@ -136,6 +136,10 @@
 		1:5..1:6 near '+'
 			Expected an expression
 	"}, 1
+	eval_test "角カッコの不対応の構文エラー", "a[a][a[a]", {"
+		1:5..1:6 near '['
+  			角カッコが閉じられていません。
+	"}, 1
 	eval_test "計算時に型が混在しているとエラー", {" 0 + "1" "}, {"
 		1:4..1:5 near '+'
 	  		type error
