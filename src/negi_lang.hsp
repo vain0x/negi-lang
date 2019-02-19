@@ -32,7 +32,7 @@
 // -----------------------------------------------
 
 // ソースコードの末尾を表すトークン
-#enum tk_eof = 0
+#enum tk_eof = 1
 
 // ソースコードに使えないトークン
 #enum tk_err
@@ -65,7 +65,7 @@
 // 式の種類
 // -----------------------------------------------
 
-#enum ex_err = 0
+#enum ex_err
 
 // 整数リテラル
 #enum ex_int
@@ -92,7 +92,7 @@
 // 演算子の種類
 // -----------------------------------------------
 
-#enum op_err = 0
+#enum op_err
 #enum op_eq // == (equal)
 #enum op_ne // != (not equal)
 #enum op_lt // < (less than)
@@ -110,7 +110,7 @@
 // 演算子のレベルの種類
 // -----------------------------------------------
 
-#enum op_level_top = 0
+#enum op_level_top
 #enum op_level_cmp = op_level_top // comparison
 #enum op_level_add // additive
 #enum op_level_mul // multitive
@@ -120,7 +120,7 @@
 // -----------------------------------------------
 
 // エラー
-#enum in_err = 0
+#enum in_err
 
 // 終了
 #enum in_exit
@@ -144,7 +144,7 @@
 // 値の型タグ
 // -----------------------------------------------
 
-#enum ty_err = 0
+#enum ty_err
 
 // 整数。値は整数値そのもの。
 #enum ty_int
@@ -668,7 +668,7 @@
 // 指定されたレベルの演算子より一段階結合力が高い演算子の式をパースする。
 #defcfunc negi_lang_parse_bin_next var ti, int op_level
 
-	if op_level == op_mul {
+	if op_level == op_level_mul {
 		return negi_lang_parse_suffix(ti)
 	}
 	return negi_lang_parse_bin(ti, op_level + 1)
