@@ -58,6 +58,9 @@
 // 右角カッコ
 #enum tok_bracket_r
 
+// セミコロン (semicolon)
+#enum tok_semi
+
 // 演算子
 #enum tok_op
 
@@ -93,6 +96,7 @@
 // -----------------------------------------------
 
 #enum op_err
+#enum op_semi // ; (semicolon)
 #enum op_eq // == (equal)
 #enum op_ne // != (not equal)
 #enum op_lt // < (less than)
@@ -332,7 +336,7 @@
 #define ctype is_op_char(%1) \
 	((%1) == '+' || (%1) == '-' || (%1) == '*' || (%1) == '/' || (%1) == '%%' \
 	|| (%1) == '&' || (%1) == '|' || (%1) == '^' || (%1) == '~' || (%1) == '!' \
-	|| (%1) == '=' || (%1) == '<' || (%1) == '>' || (%1) == ',' || (%1) == ';' \
+	|| (%1) == '=' || (%1) == '<' || (%1) == '>' || (%1) == '.' \
 	)
 
 // -----------------------------------------------
@@ -433,12 +437,13 @@
 			continue
 		}
 
-		if c == '(' || c == ')' || c == '[' || c == ']' {
+		if c == '(' || c == ')' || c == '[' || c == ']' || c == ';' {
 			r++
 			if c == '(' { kind = tok_paren_l }
 			if c == ')' { kind = tok_paren_r }
 			if c == '[' { kind = tok_bracket_l }
 			if c == ']' { kind = tok_bracket_r }
+			if c == ';' { kind = tok_semi }
 			negi_lang_tok_add kind, l, r
 			continue
 		}
@@ -469,6 +474,16 @@
 // ###############################################
 
 // トークンのリストに再帰下降構文解析を適用して、抽象構文木を作る。
+
+// -----------------------------------------------
+// トークンの種類
+// -----------------------------------------------
+
+// トークンが式の始まりを表すか否か。
+#define ctype tok_leads_exp(%1) \
+	((%1) == tok_int || (%1) == tok_str || (%1) == tok_ident \
+	|| (%1) == tok_paren_l || (%1) == tok_bracket_l \
+	)
 
 // -----------------------------------------------
 // 式リスト
@@ -568,7 +583,7 @@
 	if g_tok_kinds(tok_i) == tok_paren_l {
 		op_tok_i = tok_i
 		tok_i++
-		exp_i = negi_lang_parse_exp(tok_i)
+		exp_i = negi_lang_parse_term(tok_i)
 		if g_tok_kinds(tok_i) != tok_paren_r {
 			return negi_lang_exp_add_err("丸カッコが閉じられていません。", op_tok_i)
 		}
@@ -578,13 +593,17 @@
 	if g_tok_kinds(tok_i) == tok_bracket_l {
 		op_tok_i = tok_i
 		tok_i++
-		exp_i = negi_lang_parse_exp(tok_i)
+		exp_i = negi_lang_parse_term(tok_i)
 		if g_tok_kinds(tok_i) != tok_bracket_r {
 			return negi_lang_exp_add_err("角カッコが閉じられていません。", op_tok_i)
 		}
 		tok_i++
 		return negi_lang_exp_add_array(exp_i, op_tok_i)
 	}
+
+	// 式のパースができなかったので、次のトークンが式の始まりを表すものではないことが分かる。
+	assert tok_leads_exp(g_tok_kinds(tok_i)) == false
+
 	return negi_lang_exp_add_err("Expected an expression", tok_i)
 
 // 後置式 (x[i] のように後ろに演算子がつけたような式) をパースする。
@@ -600,7 +619,7 @@
 		op_tok_i = tok_i
 		tok_i++
 
-		exp_r = negi_lang_parse_exp(tok_i)
+		exp_r = negi_lang_parse_term(tok_i)
 
 		if g_tok_kinds(tok_i) != tok_bracket_r {
 			exp_l = negi_lang_exp_add_err("角カッコが閉じられていません。", op_tok_i)
@@ -696,9 +715,59 @@
 	loop
 	return exp_l
 
+// 項をパースする。
+// 2項演算など、丸カッコの中にかけるような式をここでは項と呼ぶことにする。
+#defcfunc negi_lang_parse_term var tok_i
+	return negi_lang_parse_bin(tok_i, op_level_top)
+
+// セミコロンで区切られた式をパースする。
+// 冗長なセミコロンは無視する。例えば `;; x ;; y` は `x ; y` と同じとして扱う。
+// 末尾にあるセミコロンの後ろには 0 を補う。例えば `x ;;` は `x ; 0` として扱う。
+// 式がなければ exp_i_none を返す。
+#defcfunc negi_lang_exp_semi var tok_i, \
+	local kind, local exp_l, local exp_r, local initial_tok_i
+
+	repeat
+		// ; nanika ---> nanika
+		if g_tok_kinds(tok_i) != tok_semi { break }
+		tok_i++
+	loop
+
+	kind = g_tok_kinds(tok_i)
+	if tok_leads_exp(kind) == false {
+		return exp_i_none
+	}
+
+	exp_l = negi_lang_parse_bin(tok_i, op_level_top)
+
+	repeat
+		initial_tok_i = tok_i
+
+		if g_tok_kinds(tok_i) != tok_semi { break }
+		tok_i++
+
+		if g_tok_kinds(tok_i) == tok_semi {
+			// ;; ---> ;
+			continue
+		}
+
+		kind = g_tok_kinds(tok_i)
+		if tok_leads_exp(kind) == false {
+			// nanika ; --> nanika ; 0
+			exp_r = negi_lang_exp_add_int(exp_int, 0, initial_tok_i)
+			exp_l = negi_lang_exp_add_bin(op_semi, exp_l, exp_r)
+			continue
+		}
+
+		exp_r = negi_lang_parse_term(tok_i)
+		exp_l = negi_lang_exp_add_bin(op_semi, exp_l, exp_r)
+	loop
+
+	return exp_l
+
 // 指定されたトークンで始まる式をパースする。
 #defcfunc negi_lang_parse_exp var tok_i
-	return negi_lang_parse_bin(tok_i, op_level_top)
+	return negi_lang_exp_semi(tok_i)
 
 // 構文解析を実行する。
 #deffunc negi_lang_parse \
@@ -711,13 +780,12 @@
 	assert exp_i == exp_i_none
 
 	tok_i = 0
-	if g_tok_kinds(tok_i) == tok_eof {
+	g_exp_i_root = negi_lang_parse_exp(tok_i)
+
+	if g_exp_i_root == exp_i_none {
 		// 空のプログラムは 0 とみなす。
 		g_exp_i_root = negi_lang_exp_add_int(exp_int, 0, tok_i)
-	} else {
-		g_exp_i_root = negi_lang_parse_exp(tok_i)
 	}
-	assert g_exp_i_root != exp_i_none
 	return
 
 // ###############################################
@@ -1019,6 +1087,12 @@
 
 	negi_lang_stack_pop ty_r, val_r
 	negi_lang_stack_pop ty, val_l
+
+	if op == op_semi {
+		// x ; y ===> y
+		negi_lang_stack_push ty_r, val_r
+		return
+	}
 
 	if op == op_eq {
 		if ty != ty_r {
