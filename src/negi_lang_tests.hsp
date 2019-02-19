@@ -70,8 +70,9 @@
 	return equal
 
 #deffunc eval_test str name, str src, str x_text_str, int x_exit, \
-	local a_text, local x_text, local a_exit
+	local a_text, local x_text, local a_exit, local ok
 
+	ok = true
 	logmes "[TEST] " + name
 
 	negi_lang_eval_src src, a_exit
@@ -80,8 +81,7 @@
 		logmes "終了コードが異なります:"
 		logmes "  期待 = " + str(x_exit)
 		logmes "  実際 = " + str(a_exit)
-		g_fail++
-		return
+		ok = false
 	}
 
 	if a_exit != 0 {
@@ -95,11 +95,14 @@
 		logmes "出力が異なります:"
 		logmes "  期待 = " + x_text
 		logmes "  実際 = " + a_text
-		g_fail++
-		return
+		ok = false
 	}
 
-	g_pass++
+	if ok {
+		g_pass++
+	} else {
+		g_fail++
+	}
 	return
 
 #deffunc main
@@ -129,6 +132,8 @@
 	eval_test "文字列から文字をとる", {"
 		"ab"[0] + "ab"[1]
 	"}, "", 'a' + 'b'
+
+	eval_test "配列の要素を取得できる", "[42][0]", "", 42
 
 	eval_test "カッコを含む式", "3 * (1 + (4 - 1))", "", 3 * (1 + (4 - 1))
 
