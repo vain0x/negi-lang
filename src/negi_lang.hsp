@@ -179,14 +179,19 @@
 	dim g_in_tis
 	g_in_count = 0
 
-	// スタック
-	// ty: データの型タグ
-	// val: データの値
-	dim g_stack_tys, 1024
-	dim g_stack_vals, 1024
-	g_stack_count = 0
+	// データが配置される領域
+	// ty, val: データの型タグと値
+	// sp: いまのスタックの末尾
+	// sp_max: スタックの限界
+	// hp: いまのヒープの末尾
+	g_data_count = 1024 * 1024 / 4 // 1MB
+	dim g_data_tys, g_data_count
+	dim g_data_vals, g_data_count
+	g_data_sp = 0
+	g_data_sp_max = g_data_count / 4
+	g_data_hp = g_data_sp_max
 
-	// ヒープ
+	// ヒープ上の文字列
 	sdim g_heap_strs, 16, 1024
 	g_heap_str_count = 0
 
@@ -759,18 +764,26 @@
 #deffunc negi_lang_stack_push int ty, int val
 
 	logmes "push ty=" + ty + " val=" + val
-	g_stack_tys(g_stack_count) = ty
-	g_stack_vals(g_stack_count) = val
-	g_stack_count++
+
+	if g_data_sp >= g_data_sp_max {
+		// FIXME: エラー箇所を報告する
+		negi_lang_eval_abort "STACK OVERFLOW", 0
+		return
+	}
+
+	g_data_tys(g_data_sp) = ty
+	g_data_vals(g_data_sp) = val
+	g_data_sp++
 	return
 
 // スタックから値を取り出す。
 #deffunc negi_lang_stack_pop var out_ty, var out_val
 
-	assert g_stack_count >= 1
-	g_stack_count--
-	out_ty = g_stack_tys(g_stack_count)
-	out_val = g_stack_vals(g_stack_count)
+	assert g_data_sp >= 1
+	g_data_sp--
+	out_ty = g_data_tys(g_data_sp)
+	out_val = g_data_vals(g_data_sp)
+	
 	logmes "pop ty=" + out_ty + " val=" + out_val
 	return
 
