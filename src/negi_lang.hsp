@@ -142,8 +142,23 @@
 // 変数
 // ###############################################
 
-// モジュールの中にある、ローカルでない変数をすべて初期化する。
-// ローカル変数と区別するため、変数の名前には g_ をつける。
+// 変数の型や有効範囲が分かりやすいように名前をつける。
+
+// 文字列上の位置や配列の要素番号を表す変数には i をつける。
+// 左右があるときは i の代わりに l, r を使う。
+// 例えば ei は式番号 (式リストの要素番号) を表す。
+// 同様に el, er は左側の式番号と右側の式番号を表す。
+
+// モジュールの中にある、ローカル変数ではない変数の名前には g_ をつける。
+
+// 配列は nani_fields と nani_count の組み合わせで管理する。
+// 例えば文字列の配列で、各文字列の長さを変数に記録しておくときは、
+//   strs: 文字列からなる配列
+//   str_lengths: 文字列の長さからなる配列
+//   str_count: 文字列リストの要素数
+// という3つの変数を使う。(strs(i) と str_length(i) が対応する。)
+// これは構造体の配列の代わりになる。
+
 #deffunc negi_lang_begin str src
 
 	// 与えられたソースコード
@@ -152,21 +167,21 @@
 
 	// トークンのリスト
 	// kind: 種類
-	// l: トークンを構成する文字列の開始の位置
-	// r: トークンを構成する文字列の終わりの位置
+	// sl: トークンを構成する文字列の開始の位置
+	// sr: トークンを構成する文字列の終わりの位置
 	dim g_tk_kinds
-	dim g_tk_ls
-	dim g_tk_rs
+	dim g_tk_sls
+	dim g_tk_srs
 	g_tk_count = 0
 
 	// 式のリスト
 	// kind: 種類
 	// int: 式に関連する整数値
-	// l, r: 式の左辺と右辺を指す式番号
-	// ti: ソースコード上での式の範囲を表すトークン番号
+	// el, er: 式の左辺と右辺を指す式番号
+	// ti: 式に関連するトークン番号
 	dim g_ex_kinds
-	dim g_ex_ls
-	dim g_ex_rs
+	dim g_ex_els
+	dim g_ex_ers
 	dim g_ex_ints
 	sdim g_ex_strs
 	dim g_ex_tis
@@ -209,10 +224,10 @@
 	g_eval_exit = 0
 
 	// エラー
-	// l, r: エラーが起こっているソースコード上の位置
+	// sl, sr: エラーが起こっているソースコード上の位置
 	sdim g_err_messages
-	dim g_err_ls
-	dim g_err_rs
+	dim g_err_sls
+	dim g_err_srs
 	g_err_count = 0
 	return
 
@@ -224,10 +239,10 @@
 // エラーの報告には、そのエラーが発生した箇所 (ソースコードのどのあたりか) を含める。
 
 // 指定された位置の行番号 (y) と列番号 (x) を計算する。
-#deffunc negi_lang_find_pos int i, var out_y, var out_x
+#deffunc negi_lang_find_pos int si, var out_y, var out_x
 	out_y = 0
 	out_x = 0
-	repeat i
+	repeat si
 		if peek(g_src, cnt) == '\n' {
 			out_y++
 			out_x = 0
@@ -244,8 +259,8 @@
 
 	buf = ""
 	repeat g_err_count
-		l = g_err_ls(cnt)
-		r = g_err_rs(cnt)
+		l = g_err_sls(cnt)
+		r = g_err_srs(cnt)
 		negi_lang_find_pos l, ly, lx
 		negi_lang_find_pos r, ry, rx
 
@@ -257,11 +272,11 @@
 	return
 
 // 処理中のエラーを追加する。
-// l, r: エラーに関連する、ソースコード上の範囲を表す。
-#deffunc negi_lang_err_add str message, int l, int r
+// sl, sr: エラーに関連する、ソースコード上の範囲を表す。
+#deffunc negi_lang_err_add str message, int sl, int sr
 	g_err_messages(g_err_count) = message
-	g_err_ls(g_err_count) = l
-	g_err_rs(g_err_count) = r
+	g_err_sls(g_err_count) = sl
+	g_err_srs(g_err_count) = sr
  	g_err_count++
 	return
 
@@ -299,22 +314,22 @@
 // トークンリスト
 // -----------------------------------------------
 
-// ソースコードの位置 l から r までの文字列を種類 kind のトークンとしてリストに追加する。
-#deffunc negi_lang_tk_add int kind, int l, int r
+// ソースコードの位置 sl から sr までの文字列を種類 kind のトークンとしてリストに追加する。
+#deffunc negi_lang_tk_add int kind, int sl, int sr
 
 	// tk_eof 以外のトークンの長さはゼロでない。さもないと無限ループになるおそれがある。
-	assert kind == tk_eof || l < r
+	assert kind == tk_eof || sl < sr
 
  	g_tk_kinds(g_tk_count) = kind
-	g_tk_ls(g_tk_count) = l
-	g_tk_rs(g_tk_count) = r
+	g_tk_sls(g_tk_count) = sl
+	g_tk_srs(g_tk_count) = sr
 	g_tk_count++
 	return
 
 // ti 番目のトークンを構成する文字列を取得する。
 #defcfunc negi_lang_tk_text int ti
 	assert ti < g_tk_count
-	return strmid(g_src, g_tk_ls(ti), g_tk_rs(ti) - g_tk_ls(ti))
+	return strmid(g_src, g_tk_sls(ti), g_tk_srs(ti) - g_tk_sls(ti))
 
 // -----------------------------------------------
 // 字句解析
@@ -437,8 +452,8 @@
 // 式を追加して、その式番号を返す。
 #deffunc negi_lang_ex_add int kind, int ti
 	g_ex_kinds(g_ex_count) = kind
-	g_ex_ls(g_ex_count) = ei_none
-	g_ex_rs(g_ex_count) = ei_none
+	g_ex_els(g_ex_count) = ei_none
+	g_ex_ers(g_ex_count) = ei_none
 	g_ex_ints(g_ex_count) = 0
 	g_ex_strs(g_ex_count) = ""
 	g_ex_tis(g_ex_count) = ti
@@ -467,12 +482,13 @@
 	return g_ex_count - 1
 
 // 2項演算を表す式を追加する。
-#defcfunc negi_lang_ex_add_bin int op, int l, int r, int ti
+// el, er: 左辺と右辺の式番号
+#defcfunc negi_lang_ex_add_bin int op, int el, int er, int ti
 
 	negi_lang_ex_add ex_op, ti
 	g_ex_ints(g_ex_count - 1) = op
-	g_ex_ls(g_ex_count - 1) = l
-	g_ex_rs(g_ex_count - 1) = r
+	g_ex_els(g_ex_count - 1) = el
+	g_ex_ers(g_ex_count - 1) = er
 	return g_ex_count - 1
 
 // -----------------------------------------------
@@ -618,9 +634,9 @@
 
 // 指定されたレベルの演算子からなる、2項演算子の式をパースする。
 #defcfunc negi_lang_parse_bin var ti, int op_level, \
-	local l, local r, local op_text, local op, local op_ti
+	local el, local er, local op_text, local op, local op_ti
 
-	l = negi_lang_parse_bin_next(ti, op_level)
+	el = negi_lang_parse_bin_next(ti, op_level)
 
 	repeat
 		if g_tk_kinds(ti) != tk_op {
@@ -634,10 +650,10 @@
 		}
 
 		ti++
-		r = negi_lang_parse_bin_next(ti, op_level)
-		l = negi_lang_ex_add_bin(op, l, r, op_ti)
+		er = negi_lang_parse_bin_next(ti, op_level)
+		el = negi_lang_ex_add_bin(op, el, er, op_ti)
 	loop
-	return l
+	return el
 
 // 指定されたトークンで始まる式をパースする。
 #defcfunc negi_lang_parse_ex var ti
@@ -717,8 +733,8 @@
 	assert g_ex_kinds(ei) == ex_op
 	op = g_ex_ints(ei)
 
-	negi_lang_gen_ex g_ex_ls(ei)
-	negi_lang_gen_ex g_ex_rs(ei)
+	negi_lang_gen_ex g_ex_els(ei)
+	negi_lang_gen_ex g_ex_ers(ei)
 
 	if op == op_ne {
 		// l != r ---> !(l == r)
@@ -842,7 +858,7 @@
 // 異常終了する。
 #deffunc negi_lang_eval_abort str message, int ti
 
-	negi_lang_err_add message, g_tk_ls(ti), g_tk_rs(ti)
+	negi_lang_err_add message, g_tk_sls(ti), g_tk_srs(ti)
 
 	// 終了コード 1 で停止させる。
 	negi_lang_stack_push ty_int, 1
