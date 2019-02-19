@@ -14,6 +14,13 @@
 #const false 0
 
 // -----------------------------------------------
+// 文字コード
+// -----------------------------------------------
+
+#const char_cr 0x0d
+#const char_lf 0x0a
+
+// -----------------------------------------------
 // 致命的なエラー
 // -----------------------------------------------
 
@@ -272,7 +279,7 @@
 	out_y = 0
 	out_x = 0
 	repeat src_i
-		if peek(g_src, cnt) == '\n' {
+		if peek(g_src, cnt) == char_lf {
 			out_y++
 			out_x = 0
 			continue
@@ -386,7 +393,7 @@
 		c = peek(g_src, l)
 
 		// 空白と改行は無視する。
-		if c == ' ' || c == '\t' || c == '\r' || c == '\n' {
+		if c == ' ' || c == '\t' || c == char_cr || c == char_lf {
 			r++
 			continue
 		}
@@ -409,7 +416,7 @@
 				if r >= g_src_len { break }
 				c = peek(g_src, r)
 
-				if c == '\r' || c == '\n' {
+				if c == char_cr || c == char_lf {
 					break
 				}
 				if c == '"' {
@@ -462,6 +469,7 @@
 		}
 
 		// このとき、文字 c はトークンとして不正なもの。エラーを表すトークンとして追加する。
+		logmes "tok_err char=" + c
 		r++
 		negi_lang_tok_add tok_err, l, r
 	loop
@@ -785,6 +793,11 @@
 	if g_exp_i_root == exp_i_none {
 		// 空のプログラムは 0 とみなす。
 		g_exp_i_root = negi_lang_exp_add_int(exp_int, 0, tok_i)
+	}
+	if g_tok_kinds(tok_i) != tok_eof {
+		logmes "tok_i = " + tok_i
+		logmes "tok_kind = " + g_tok_kinds(tok_i)
+		negi_lang_err_add "この字句を解釈できませんでした。", g_tok_src_ls(tok_i), g_tok_src_rs(tok_i)
 	}
 	return
 

@@ -11,6 +11,8 @@
 
 #const true 1
 #const false 0
+#const char_cr 0x0d
+#const char_lf 0x0a
 
 #deffunc test_begin
 	g_pass = 0
@@ -44,14 +46,14 @@
 		}
 		if ai < a_len {
 			c = peek(actual, ai)
-			if c == ' ' || c == '\r' || c == '\n' {
+			if c == ' ' || c == char_cr || c == char_lf {
 				ai++
 				continue
 			}
 		}
 		if xi < x_len {
 			c = peek(expected, xi)
-			if c == ' ' || c == '\r' || c== '\n' {
+			if c == ' ' || c == char_cr || c == char_lf {
 				xi++
 				continue
 			}
@@ -144,6 +146,10 @@
 	eval_test "構文エラー", "1 + + 2", {"
 		1:5..1:6 near '+'
 			Expected an expression
+	"}, 1
+	eval_test "パーサーが末尾に到達しなければエラー", "1 2", {"
+		1:3..1:4 near '2'
+  			この字句を解釈できませんでした。
 	"}, 1
 	eval_test "丸カッコの不対応の構文エラー", "(a) + (a + (a)", {"
 		1:7..1:8 near '('
