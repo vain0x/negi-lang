@@ -71,6 +71,8 @@
 // 演算子
 #enum tok_op
 
+#enum tok_let
+
 // -----------------------------------------------
 // 式の種類
 // -----------------------------------------------
@@ -91,6 +93,11 @@
 
 // 演算式
 #enum exp_op
+
+// let 式
+// int: 定義される識別子のトークン番号
+// exp_r: 初期化式
+#enum exp_let
 
 // -----------------------------------------------
 // 無効な式番号
@@ -145,11 +152,16 @@
 // 配列リテラルをスタックにプッシュ
 #enum cmd_push_array
 
+// 変数の値を読み取る
+#enum cmd_var
+
 // スタック上の2つの要素を交換
 #enum cmd_swap
 
 // 演算
 #enum cmd_op
+
+#enum cmd_let
 
 // -----------------------------------------------
 // 値の型タグ
@@ -221,7 +233,7 @@
 	// 命令列
 	// kind: 命令の種類
 	// x: 命令がとる整数型の引数 (1つ目)
-	// strs: 命令がとる文字列型の引数
+	// str: 命令がとる文字列型の引数
 	// tok_i: 命令に関連するトークン番号
 	dim g_cmd_kinds
 	dim g_cmd_xs
@@ -246,12 +258,20 @@
 	g_str_count = 0
 
 	// 評価中に生成された配列のリスト
-	// length: 配列の現在の長さ
+	// len: 配列の現在の長さ
 	// dl, dr: この配列の要素が占めるデータ領域の範囲
 	dim g_array_lens, 1024
 	dim g_array_dls, 1024
 	dim g_array_drs, 1024
 	g_array_count = 0
+
+	// 評価中に生成された変数のリスト
+	// name: 変数名
+	// ty, val: 変数のデータ
+	sdim g_var_names
+	dim g_var_tys
+	dim g_var_vals
+	g_var_count = 0
 
 	// プログラムカウンタ (実行中のインストラクション番号)
 	g_pc = 0
@@ -367,12 +387,19 @@
 	assert tok_i < g_tok_count
 	return strmid(g_src, g_tok_src_ls(tok_i), g_tok_src_rs(tok_i) - g_tok_src_ls(tok_i))
 
+#defcfunc negi_lang_tok_detect_kind str text
+
+	if text == "let" {
+		return tok_let
+	}
+	return tok_ident
+
 // -----------------------------------------------
 // 字句解析
 // -----------------------------------------------
 
 #deffunc negi_lang_tokenize \
-	local c, local l, local r, local kind
+	local c, local l, local r, local kind, local text
 
 	assert g_tok_count == 0 // 変数が初期化済みであることを確認する。
 
@@ -440,7 +467,9 @@
 				r++
 			loop
 
-			negi_lang_tok_add tok_ident, l, r
+			text = strmid(g_src, l, r - l)
+			kind = negi_lang_tok_detect_kind(text)
+			negi_lang_tok_add kind, l, r
 			continue
 		}
 
@@ -487,11 +516,15 @@
 // トークンの種類
 // -----------------------------------------------
 
-// トークンが式の始まりを表すか否か。
-#define ctype tok_leads_exp(%1) \
+// トークンが項の始まりを表すか否か。
+#define ctype tok_leads_term(%1) \
 	((%1) == tok_int || (%1) == tok_str || (%1) == tok_ident \
 	|| (%1) == tok_paren_l || (%1) == tok_bracket_l \
 	)
+
+// トークンが文の始まりを表すか否か。
+#define ctype tok_leads_stmt(%1) \
+	(tok_leads_term(%1) || (%1) == tok_let)
 
 // -----------------------------------------------
 // 式リスト
@@ -543,6 +576,14 @@
 	g_exp_ints(g_exp_count - 1) = op
 	g_exp_exp_ls(g_exp_count - 1) = exp_l
 	g_exp_exp_rs(g_exp_count - 1) = exp_r
+	return g_exp_count - 1
+
+// let 式を追加する。
+#defcfunc negi_lang_exp_add_let int ident_tok_i, int init_exp_i, int tok_i
+
+	negi_lang_exp_add exp_let, tok_i
+	g_exp_ints(g_exp_count - 1) = ident_tok_i
+	g_exp_exp_rs(g_exp_count - 1) = init_exp_i
 	return g_exp_count - 1
 
 // -----------------------------------------------
@@ -609,8 +650,8 @@
 		return negi_lang_exp_add_array(exp_i, op_tok_i)
 	}
 
-	// 式のパースができなかったので、次のトークンが式の始まりを表すものではないことが分かる。
-	assert tok_leads_exp(g_tok_kinds(tok_i)) == false
+	// 項のパースができなかったので、次のトークンが項の始まりを表すものではないことが分かる。
+	assert tok_leads_term(g_tok_kinds(tok_i)) == false
 
 	return negi_lang_exp_add_err("Expected an expression", tok_i)
 
@@ -728,7 +769,41 @@
 #defcfunc negi_lang_parse_term var tok_i
 	return negi_lang_parse_bin(tok_i, op_level_top)
 
-// セミコロンで区切られた式をパースする。
+// let 式をパースする。
+#defcfunc negi_lang_parse_let var tok_i, \
+	local let_tok_i, local ident_tok_i, local init_exp_i
+
+	assert g_tok_kinds(tok_i) == tok_let
+	let_tok_i = tok_i
+	tok_i++
+
+	if g_tok_kinds(tok_i) != tok_ident {
+		return negi_lang_exp_add_err("変数名が必要です。", tok_i)
+	}
+	ident_tok_i = tok_i
+	tok_i++
+
+	if (g_tok_kinds(tok_i) == tok_op && negi_lang_tok_text(tok_i) == "=") == false {
+		return negi_lang_exp_add_err("'=' が必要です。", tok_i)
+	}
+	tok_i++
+
+	init_exp_i = negi_lang_parse_term(tok_i)
+
+	return negi_lang_exp_add_let(ident_tok_i, init_exp_i, let_tok_i)
+
+// 文をパースする。
+#defcfunc negi_lang_parse_stmt var tok_i
+
+	assert tok_leads_stmt(g_tok_kinds(tok_i))
+
+	if g_tok_kinds(tok_i) == tok_let {
+		return negi_lang_parse_let(tok_i)
+	}
+	return negi_lang_parse_term(tok_i)
+
+// セミコロン式をパースする。
+// 文をセミコロンで区切って並べたものを、ここではセミコロン式と呼んでいる。
 // 冗長なセミコロンは無視する。例えば `;; x ;; y` は `x ; y` と同じとして扱う。
 // 末尾にあるセミコロンの後ろには 0 を補う。例えば `x ;;` は `x ; 0` として扱う。
 // 式がなければ exp_i_none を返す。
@@ -742,11 +817,11 @@
 	loop
 
 	kind = g_tok_kinds(tok_i)
-	if tok_leads_exp(kind) == false {
+	if tok_leads_stmt(kind) == false {
 		return exp_i_none
 	}
 
-	exp_l = negi_lang_parse_bin(tok_i, op_level_top)
+	exp_l = negi_lang_parse_stmt(tok_i)
 
 	repeat
 		initial_tok_i = tok_i
@@ -760,14 +835,14 @@
 		}
 
 		kind = g_tok_kinds(tok_i)
-		if tok_leads_exp(kind) == false {
+		if tok_leads_stmt(kind) == false {
 			// nanika ; --> nanika ; 0
 			exp_r = negi_lang_exp_add_int(exp_int, 0, initial_tok_i)
 			exp_l = negi_lang_exp_add_bin(op_semi, exp_l, exp_r)
 			continue
 		}
 
-		exp_r = negi_lang_parse_term(tok_i)
+		exp_r = negi_lang_parse_stmt(tok_i)
 		exp_l = negi_lang_exp_add_bin(op_semi, exp_l, exp_r)
 	loop
 
@@ -847,6 +922,12 @@
 // コード生成
 // -----------------------------------------------
 
+#deffunc negi_lang_gen_exp_ident int exp_i
+
+	assert g_exp_kinds(exp_i) == exp_ident
+	negi_lang_cmd_add_str cmd_var, g_exp_strs(exp_i), g_exp_tok_is(exp_i)
+	return
+
 // 2項演算を行うコードを生成する。
 // 評価の実装を簡単にするため、式を適当に変形する。
 #deffunc negi_lang_gen_exp_op int exp_i, \
@@ -887,6 +968,16 @@
 	negi_lang_cmd_add_int cmd_op, op, g_exp_tok_is(exp_i)
 	return
 
+#deffunc negi_lang_gen_exp_let int exp_i, \
+	local ident_tok_i
+
+	assert g_exp_kinds(exp_i) == exp_let
+	ident_tok_i = g_exp_ints(exp_i)
+
+	negi_lang_gen_exp g_exp_exp_rs(exp_i)
+	negi_lang_cmd_add_str cmd_let, negi_lang_tok_text(ident_tok_i), ident_tok_i
+	return
+
 // 式を計算するコードを生成する。
 #deffunc negi_lang_gen_exp int exp_i
 
@@ -904,12 +995,15 @@
 		return
 	}
 	if g_exp_kinds(exp_i) == exp_ident {
-		// FIXME: 変数として処理する
-		negi_lang_cmd_add_int cmd_push_int, 0, g_exp_tok_is(exp_i)
+		negi_lang_gen_exp_ident exp_i
 		return
 	}
 	if g_exp_kinds(exp_i) == exp_op {
 		negi_lang_gen_exp_op exp_i
+		return
+	}
+	if g_exp_kinds(exp_i) == exp_let {
+		negi_lang_gen_exp_let exp_i
 		return
 	}
 	if g_exp_kinds(exp_i) == exp_err {
@@ -1051,6 +1145,30 @@
 	return
 
 // -----------------------------------------------
+// 変数リスト
+// -----------------------------------------------
+
+#deffunc negi_lang_var_add str name, int ty, int val
+
+	g_var_names(g_var_count) = name
+	g_var_tys(g_var_count) = ty
+	g_var_vals(g_var_count) = val
+	g_var_count++
+	return
+
+#deffunc negi_lang_var_get str name, var out_ty, var out_val
+
+	out_ty = ty_err
+	repeat g_var_count
+		if g_var_names(cnt) == name {
+			out_ty = g_var_tys(cnt)
+			out_val = g_var_vals(cnt)
+			break
+		}
+	loop
+	return
+
+// -----------------------------------------------
 // 評価
 // -----------------------------------------------
 
@@ -1082,6 +1200,19 @@
 	negi_lang_array_set ty_array, array_val, 0, elem_ty, elem_val
 
 	negi_lang_stack_push ty_array, array_val
+	return
+
+#deffunc negi_lang_eval_var int cmd_i, \
+	local var_ty, local var_val
+
+	assert g_cmd_kinds(cmd_i) == cmd_var
+
+	negi_lang_var_get g_cmd_strs(cmd_i), var_ty, var_val
+	if var_ty == ty_err {
+		negi_lang_eval_abort "変数が定義されていません。", g_cmd_tok_is(cmd_i)
+		return
+	}
+	negi_lang_stack_push var_ty, var_val
 	return
 
 // スワップ命令を処理する。スタックの上の2つの要素の順番を入れ替える。
@@ -1213,6 +1344,16 @@
 	logmes "op = " + op
 	failwith "Unknown op"
 
+#deffunc negi_lang_eval_let int cmd_i, \
+	local init_ty, local init_val
+
+	assert g_cmd_kinds(cmd_i) == cmd_let
+	negi_lang_stack_pop init_ty, init_val
+	negi_lang_var_add g_cmd_strs(cmd_i), init_ty, init_val
+
+	negi_lang_stack_push init_ty, init_val
+	return
+
 // 評価のメインループ。
 // 終了命令に到達するまで、命令のリストを1つずつ実行する。
 #deffunc negi_lang_eval_main \
@@ -1234,12 +1375,20 @@
 			negi_lang_eval_push_array cmd_i
 			continue
 		}
+		if g_cmd_kinds(cmd_i) == cmd_var {
+			negi_lang_eval_var cmd_i
+			continue
+		}
 		if g_cmd_kinds(cmd_i) == cmd_swap {
 			negi_lang_eval_swap cmd_i
 			continue
 		}
 		if g_cmd_kinds(cmd_i) == cmd_op {
 			negi_lang_eval_op cmd_i, g_cmd_xs(cmd_i)
+			continue
+		}
+		if g_cmd_kinds(cmd_i) == cmd_let {
+			negi_lang_eval_let cmd_i
 			continue
 		}
 		if g_cmd_kinds(cmd_i) == cmd_err {
