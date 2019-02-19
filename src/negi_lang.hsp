@@ -32,61 +32,61 @@
 // -----------------------------------------------
 
 // ソースコードに使えないトークン
-#enum tk_err = 1
+#enum tok_err = 1
 
 // ソースコードの末尾を表すトークン
-#enum tk_eof
+#enum tok_eof
 
 // 整数を表すトークン
-#enum tk_int
+#enum tok_int
 
 // 文字列を表すトークン
-#enum tk_str
+#enum tok_str
 
 // 識別子を表すトークン
-#enum tk_ident
+#enum tok_ident
 
 // 左丸カッコ
-#enum tk_paren_l
+#enum tok_paren_l
 
 // 右丸カッコ
-#enum tk_paren_r
+#enum tok_paren_r
 
 // 左角カッコ
-#enum tk_bracket_l
+#enum tok_bracket_l
 
 // 右角カッコ
-#enum tk_bracket_r
+#enum tok_bracket_r
 
 // 演算子
-#enum tk_op
+#enum tok_op
 
 // -----------------------------------------------
 // 式の種類
 // -----------------------------------------------
 
-#enum ex_err
+#enum exp_err
 
 // 整数リテラル
-#enum ex_int
+#enum exp_int
 
 // 文字列リテラル
-#enum ex_str
+#enum exp_str
 
 // 配列リテラル
-#enum ex_array
+#enum exp_array
 
 // 識別子
-#enum ex_ident
+#enum exp_ident
 
 // 演算式
-#enum ex_op
+#enum exp_op
 
 // -----------------------------------------------
 // 無効な式番号
 // -----------------------------------------------
 
-#const ei_none 0
+#const exp_i_none 0
 
 // -----------------------------------------------
 // 演算子の種類
@@ -120,25 +120,25 @@
 // -----------------------------------------------
 
 // エラー
-#enum in_err
+#enum cmd_err
 
 // 終了
-#enum in_exit
+#enum cmd_exit
 
 // 整数リテラルをスタックにプッシュ
-#enum in_push_int
+#enum cmd_push_int
 
 // 文字列リテラルをスタックにプッシュ
-#enum in_push_str
+#enum cmd_push_str
 
 // 配列リテラルをスタックにプッシュ
-#enum in_push_array
+#enum cmd_push_array
 
 // スタック上の2つの要素を交換
-#enum in_swap
+#enum cmd_swap
 
 // 演算
-#enum in_op
+#enum cmd_op
 
 // -----------------------------------------------
 // 値の型タグ
@@ -163,8 +163,8 @@
 
 // 文字列上の位置や配列の要素番号を表す変数には i をつける。
 // 左右があるときは i の代わりに l, r を使う。
-// 例えば ei は式番号 (式リストの要素番号) を表す。
-// 同様に el, er は左側の式番号と右側の式番号を表す。
+// 例えば exp_i は式番号 (式リストの要素番号) を表す。
+// 同様に exp_l, exp_r は左側の式番号と右側の式番号を表す。
 
 // モジュールの中にある、ローカル変数ではない変数の名前には g_ をつける。
 
@@ -184,51 +184,51 @@
 
 	// トークンのリスト
 	// kind: 種類
-	// sl: トークンを構成する文字列の開始の位置
-	// sr: トークンを構成する文字列の終わりの位置
-	dim g_tk_kinds
-	dim g_tk_sls
-	dim g_tk_srs
-	g_tk_count = 0
+	// src_l: トークンを構成する文字列の開始の位置
+	// src_r: トークンを構成する文字列の終わりの位置
+	dim g_tok_kinds
+	dim g_tok_src_ls
+	dim g_tok_src_rs
+	g_tok_count = 0
 
 	// 式のリスト
 	// kind: 種類
 	// int: 式に関連する整数値
-	// el, er: 式の左辺と右辺を指す式番号
-	// ti: 式に関連するトークン番号
-	dim g_ex_kinds
-	dim g_ex_els
-	dim g_ex_ers
-	dim g_ex_ints
-	sdim g_ex_strs
-	dim g_ex_tis
-	g_ex_count = 0
+	// exp_l, exp_r: 式の左辺と右辺を指す式番号
+	// tok_i: 式に関連するトークン番号
+	dim g_exp_kinds
+	dim g_exp_exp_ls
+	dim g_exp_exp_rs
+	dim g_exp_ints
+	sdim g_exp_strs
+	dim g_exp_tok_is
+	g_exp_count = 0
 
 	// プログラム全体からなる式の式番号
-	g_ei_root = ei_none
+	g_exp_i_root = exp_i_none
 
 	// 命令列
 	// kind: 命令の種類
 	// x: 命令がとる整数型の引数 (1つ目)
 	// strs: 命令がとる文字列型の引数
-	// ti: 命令に対応するソースコード上での範囲を表すトークン番号
-	dim g_in_kinds
-	dim g_in_xs
-	sdim g_in_strs
-	dim g_in_tis
-	g_in_count = 0
+	// tok_i: 命令に関連するトークン番号
+	dim g_cmd_kinds
+	dim g_cmd_xs
+	sdim g_cmd_strs
+	dim g_cmd_tok_is
+	g_cmd_count = 0
 
 	// データが配置される領域
 	// ty, val: データの型タグと値
-	// sp: いまのスタックの末尾
-	// sp_max: スタックの限界
-	// hp: いまのヒープの末尾
+	// stack_ptr: いまのスタックの末尾
+	// stack_ptr_max: スタック全体の末尾 (= ヒープの先頭)
+	// heap_ptr: いまのヒープの末尾
 	g_data_count = 1024 * 1024 / 4 // 1MB
 	dim g_data_tys, g_data_count
 	dim g_data_vals, g_data_count
-	g_data_sp = 0
-	g_data_sp_max = g_data_count / 4
-	g_data_hp = g_data_sp_max
+	g_data_stack_ptr = 0
+	g_data_stack_ptr_max = g_data_count / 4
+	g_data_heap_ptr = g_data_stack_ptr_max
 
 	// 評価中に生成された文字列のリスト
 	sdim g_strs, 16, 1024
@@ -237,7 +237,7 @@
 	// 評価中に生成された配列のリスト
 	// length: 配列の現在の長さ
 	// dl, dr: この配列の要素が占めるデータ領域の範囲
-	dim g_array_lengths, 1024
+	dim g_array_lens, 1024
 	dim g_array_dls, 1024
 	dim g_array_drs, 1024
 	g_array_count = 0
@@ -249,10 +249,10 @@
 	g_eval_exit = 0
 
 	// エラー
-	// sl, sr: エラーが起こっているソースコード上の位置
+	// src_l, src_r: エラーが起こっているソースコード上の位置
 	sdim g_err_messages
-	dim g_err_sls
-	dim g_err_srs
+	dim g_err_src_ls
+	dim g_err_src_rs
 	g_err_count = 0
 	return
 
@@ -264,10 +264,10 @@
 // エラーの報告には、そのエラーが発生した箇所 (ソースコードのどのあたりか) を含める。
 
 // 指定された位置の行番号 (y) と列番号 (x) を計算する。
-#deffunc negi_lang_find_pos int si, var out_y, var out_x
+#deffunc negi_lang_find_pos int src_i, var out_y, var out_x
 	out_y = 0
 	out_x = 0
-	repeat si
+	repeat src_i
 		if peek(g_src, cnt) == '\n' {
 			out_y++
 			out_x = 0
@@ -280,28 +280,28 @@
 // エラーの一覧を表す文字列を生成する。
 #deffunc negi_lang_err_summary var buf, \
 	local l, local r, local ly, local lx, local ry, local rx, \
-	local near, local msg
+	local text, local msg
 
 	buf = ""
 	repeat g_err_count
-		l = g_err_sls(cnt)
-		r = g_err_srs(cnt)
+		l = g_err_src_ls(cnt)
+		r = g_err_src_rs(cnt)
 		negi_lang_find_pos l, ly, lx
 		negi_lang_find_pos r, ry, rx
 
-		near = strmid(g_src, l, r - l)
-		msg = g_err_messages(cnt)
+		text = strmid(g_src, l, r - l)
 
-		buf += strf("%d:%d..%d:%d near '%s'\n  %s\n", 1 + ly, 1 + lx, 1 + ry, 1 + rx, near, msg)
+		buf += strf("%d:%d..%d:%d near '%s'\n  %s\n", 1 + ly, 1 + lx, 1 + ry, 1 + rx, text, g_err_messages(cnt))
 	loop
 	return
 
 // 処理中のエラーを追加する。
-// sl, sr: エラーに関連する、ソースコード上の範囲を表す。
-#deffunc negi_lang_err_add str message, int sl, int sr
+// src_l, src_r: エラーに関連する、ソースコード上の範囲を表す。
+#deffunc negi_lang_err_add str message, int src_l, int src_r
+
 	g_err_messages(g_err_count) = message
-	g_err_sls(g_err_count) = sl
-	g_err_srs(g_err_count) = sr
+	g_err_src_ls(g_err_count) = src_l
+	g_err_src_rs(g_err_count) = src_r
  	g_err_count++
 	return
 
@@ -312,7 +312,7 @@
 // ソースコードをトークン (単語や記号などのまとまり) 単位に分割する。
 // この工程により、後続の構文解析がやりやすくなる。
 
-// トークンのリストは tk_eof で終わるようにする。
+// トークンのリストは tok_eof で終わるようにする。
 // エラーの報告のため、トークンがソースコードのどの位置にあるかを記録しておく。
 
 // -----------------------------------------------
@@ -339,22 +339,22 @@
 // トークンリスト
 // -----------------------------------------------
 
-// ソースコードの位置 sl から sr までの文字列を種類 kind のトークンとしてリストに追加する。
-#deffunc negi_lang_tk_add int kind, int sl, int sr
+// ソースコードの位置 src_l から src_r までの文字列を種類 kind のトークンとしてリストに追加する。
+#deffunc negi_lang_tok_add int kind, int src_l, int src_r
 
-	// tk_eof 以外のトークンの長さはゼロでない。さもないと無限ループになるおそれがある。
-	assert kind == tk_eof || sl < sr
+	// tok_eof 以外のトークンの長さはゼロでない。さもないと無限ループになるおそれがある。
+	assert kind == tok_eof || src_l < src_r
 
- 	g_tk_kinds(g_tk_count) = kind
-	g_tk_sls(g_tk_count) = sl
-	g_tk_srs(g_tk_count) = sr
-	g_tk_count++
+ 	g_tok_kinds(g_tok_count) = kind
+	g_tok_src_ls(g_tok_count) = src_l
+	g_tok_src_rs(g_tok_count) = src_r
+	g_tok_count++
 	return
 
-// ti 番目のトークンを構成する文字列を取得する。
-#defcfunc negi_lang_tk_text int ti
-	assert ti < g_tk_count
-	return strmid(g_src, g_tk_sls(ti), g_tk_srs(ti) - g_tk_sls(ti))
+// tok_i 番目のトークンを構成する文字列を取得する。
+#defcfunc negi_lang_tok_text int tok_i
+	assert tok_i < g_tok_count
+	return strmid(g_src, g_tok_src_ls(tok_i), g_tok_src_rs(tok_i) - g_tok_src_ls(tok_i))
 
 // -----------------------------------------------
 // 字句解析
@@ -363,7 +363,7 @@
 #deffunc negi_lang_tokenize \
 	local c, local l, local r, local kind
 
-	assert g_tk_count == 0 // 変数が初期化済みであることを確認する。
+	assert g_tok_count == 0 // 変数が初期化済みであることを確認する。
 
 	repeat
 		// 1回のループで、位置 l から始まる1つのトークンを切り出す。
@@ -374,7 +374,7 @@
 		l = r
 
 		if l >= g_src_len {
-			negi_lang_tk_add tk_eof, l, r
+			negi_lang_tok_add tok_eof, l, r
 			break
 		}
 
@@ -395,7 +395,7 @@
 				r++
 			loop
 
-			negi_lang_tk_add tk_int, l, r
+			negi_lang_tok_add tok_int, l, r
 			continue
 		}
 
@@ -415,7 +415,7 @@
 				r++
 			loop
 
-			negi_lang_tk_add tk_str, l, r
+			negi_lang_tok_add tok_str, l, r
 			continue
 		}
 
@@ -429,17 +429,17 @@
 				r++
 			loop
 
-			negi_lang_tk_add tk_ident, l, r
+			negi_lang_tok_add tok_ident, l, r
 			continue
 		}
 
 		if c == '(' || c == ')' || c == '[' || c == ']' {
 			r++
-			if c == '(' { kind = tk_paren_l }
-			if c == ')' { kind = tk_paren_r }
-			if c == '[' { kind = tk_bracket_l }
-			if c == ']' { kind = tk_bracket_r }
-			negi_lang_tk_add kind, l, r
+			if c == '(' { kind = tok_paren_l }
+			if c == ')' { kind = tok_paren_r }
+			if c == '[' { kind = tok_bracket_l }
+			if c == ']' { kind = tok_bracket_r }
+			negi_lang_tok_add kind, l, r
 			continue
 		}
 
@@ -452,13 +452,13 @@
 				if is_op_char(c) == false { break }
 				r++
 			loop
-			negi_lang_tk_add tk_op, l, r
+			negi_lang_tok_add tok_op, l, r
 			continue
 		}
 
 		// このとき、文字 c はトークンとして不正なもの。エラーを表すトークンとして追加する。
 		r++
-		negi_lang_tk_add tk_err, l, r
+		negi_lang_tok_add tok_err, l, r
 	loop
 
 	assert r == g_src_len
@@ -475,64 +475,64 @@
 // -----------------------------------------------
 
 // 式を追加して、その式番号を返す。
-#deffunc negi_lang_ex_add int kind, int ti
-	g_ex_kinds(g_ex_count) = kind
-	g_ex_els(g_ex_count) = ei_none
-	g_ex_ers(g_ex_count) = ei_none
-	g_ex_ints(g_ex_count) = 0
-	g_ex_strs(g_ex_count) = ""
-	g_ex_tis(g_ex_count) = ti
-	g_ex_count++
+#deffunc negi_lang_exp_add int kind, int tok_i
+	g_exp_kinds(g_exp_count) = kind
+	g_exp_exp_ls(g_exp_count) = exp_i_none
+	g_exp_exp_rs(g_exp_count) = exp_i_none
+	g_exp_ints(g_exp_count) = 0
+	g_exp_strs(g_exp_count) = ""
+	g_exp_tok_is(g_exp_count) = tok_i
+	g_exp_count++
 	return
 
 // 整数値をパラメーターに持つ式を追加する。
-#defcfunc negi_lang_ex_add_int int kind, int value, int ti
+#defcfunc negi_lang_exp_add_int int kind, int value, int tok_i
 
-	negi_lang_ex_add kind, ti
-	g_ex_ints(g_ex_count - 1) = value
-	return g_ex_count - 1
+	negi_lang_exp_add kind, tok_i
+	g_exp_ints(g_exp_count - 1) = value
+	return g_exp_count - 1
 
 // 文字列をパラメーターに持つ式を追加する。
-#defcfunc negi_lang_ex_add_str int kind, str value, int ti
+#defcfunc negi_lang_exp_add_str int kind, str value, int tok_i
 
-	negi_lang_ex_add kind, ti
-	g_ex_strs(g_ex_count - 1) = value
-	return g_ex_count - 1
+	negi_lang_exp_add kind, tok_i
+	g_exp_strs(g_exp_count - 1) = value
+	return g_exp_count - 1
 
-#defcfunc negi_lang_ex_add_array int el, int ti
+#defcfunc negi_lang_exp_add_array int exp_l, int tok_i
 
-	negi_lang_ex_add ex_array, ti
-	g_ex_els(g_ex_count - 1) = el
-	return g_ex_count - 1
+	negi_lang_exp_add exp_array, tok_i
+	g_exp_exp_ls(g_exp_count - 1) = exp_l
+	return g_exp_count - 1
 
 // エラーを表す式を追加する。
-#defcfunc negi_lang_ex_add_err str message, int ti
+#defcfunc negi_lang_exp_add_err str message, int tok_i
 
-	negi_lang_ex_add ex_err, ti
-	g_ex_strs(g_ex_count - 1) = message
-	return g_ex_count - 1
+	negi_lang_exp_add exp_err, tok_i
+	g_exp_strs(g_exp_count - 1) = message
+	return g_exp_count - 1
 
 // 2項演算を表す式を追加する。
-// el, er: 左辺と右辺の式番号
-#defcfunc negi_lang_ex_add_bin int op, int el, int er, int ti
+// exp_l, exp_r: 左辺と右辺の式番号
+#defcfunc negi_lang_exp_add_bin int op, int exp_l, int exp_r, int tok_i
 
-	negi_lang_ex_add ex_op, ti
-	g_ex_ints(g_ex_count - 1) = op
-	g_ex_els(g_ex_count - 1) = el
-	g_ex_ers(g_ex_count - 1) = er
-	return g_ex_count - 1
+	negi_lang_exp_add exp_op, tok_i
+	g_exp_ints(g_exp_count - 1) = op
+	g_exp_exp_ls(g_exp_count - 1) = exp_l
+	g_exp_exp_rs(g_exp_count - 1) = exp_r
+	return g_exp_count - 1
 
 // -----------------------------------------------
 // 構文解析
 // -----------------------------------------------
 
 // 文字列リテラルをパースする。
-#defcfunc negi_lang_parse_str var ti, \
-	local text, local text_len, local ei
+#defcfunc negi_lang_parse_str var tok_i, \
+	local text, local text_len, local exp_i
 
-	assert g_tk_kinds(ti) == tk_str
+	assert g_tok_kinds(tok_i) == tok_str
 
-	text = negi_lang_tk_text(ti)
+	text = negi_lang_tok_text(tok_i)
 	text_len = strlen(text)
 
 	assert text_len >= 1 && peek(text, 0) == '"'
@@ -542,87 +542,87 @@
 	}
 	// リテラルの中身
 	text = strmid(text, 1, text_len - 1)
-	ei = negi_lang_ex_add_str(ex_str, text, ti)
-	ti++
-	return ei
+	exp_i = negi_lang_exp_add_str(exp_str, text, tok_i)
+	tok_i++
+	return exp_i
 
 // アトム式 (分解できない式) をパースする。
-#defcfunc negi_lang_parse_atom var ti, \
-	local value, local ei, local op_ti
+#defcfunc negi_lang_parse_atom var tok_i, \
+	local value, local exp_i, local op_tok_i
 
-	if g_tk_kinds(ti) == tk_int {
-		value = int(negi_lang_tk_text(ti))
-		ei = negi_lang_ex_add_int(ex_int, value, ti)
-		ti++
-		return ei
+	if g_tok_kinds(tok_i) == tok_int {
+		value = int(negi_lang_tok_text(tok_i))
+		exp_i = negi_lang_exp_add_int(exp_int, value, tok_i)
+		tok_i++
+		return exp_i
 	}
-	if g_tk_kinds(ti) == tk_str {
-		return negi_lang_parse_str(ti)
+	if g_tok_kinds(tok_i) == tok_str {
+		return negi_lang_parse_str(tok_i)
 	}
-	if g_tk_kinds(ti) == tk_ident {
-		value = negi_lang_tk_text(ti)
-		ei = negi_lang_ex_add_str(ex_ident, value, ti)
-		ti++
-		return ei
+	if g_tok_kinds(tok_i) == tok_ident {
+		value = negi_lang_tok_text(tok_i)
+		exp_i = negi_lang_exp_add_str(exp_ident, value, tok_i)
+		tok_i++
+		return exp_i
 	}
-	if g_tk_kinds(ti) == tk_paren_l {
-		op_ti = ti
-		ti++
-		ei = negi_lang_parse_ex(ti)
-		if g_tk_kinds(ti) != tk_paren_r {
-			return negi_lang_ex_add_err("丸カッコが閉じられていません。", op_ti)
+	if g_tok_kinds(tok_i) == tok_paren_l {
+		op_tok_i = tok_i
+		tok_i++
+		exp_i = negi_lang_parse_exp(tok_i)
+		if g_tok_kinds(tok_i) != tok_paren_r {
+			return negi_lang_exp_add_err("丸カッコが閉じられていません。", op_tok_i)
 		}
-		ti++
-		return ei
+		tok_i++
+		return exp_i
 	}
-	if g_tk_kinds(ti) == tk_bracket_l {
-		op_ti = ti
-		ti++
-		ei = negi_lang_parse_ex(ti)
-		if g_tk_kinds(ti) != tk_bracket_r {
-			return negi_lang_ex_add_err("角カッコが閉じられていません。", op_ti)
+	if g_tok_kinds(tok_i) == tok_bracket_l {
+		op_tok_i = tok_i
+		tok_i++
+		exp_i = negi_lang_parse_exp(tok_i)
+		if g_tok_kinds(tok_i) != tok_bracket_r {
+			return negi_lang_exp_add_err("角カッコが閉じられていません。", op_tok_i)
 		}
-		ti++
-		return negi_lang_ex_add_array(ei, op_ti)
+		tok_i++
+		return negi_lang_exp_add_array(exp_i, op_tok_i)
 	}
-	return negi_lang_ex_add_err("Expected an expression", ti)
+	return negi_lang_exp_add_err("Expected an expression", tok_i)
 
 // 後置式 (x[i] のように後ろに演算子がつけたような式) をパースする。
-#defcfunc negi_lang_parse_suffix var ti, \
-	local el, local er, local op_ti
+#defcfunc negi_lang_parse_suffix var tok_i, \
+	local exp_l, local exp_r, local op_tok_i
 
-	el = negi_lang_parse_atom(ti)
+	exp_l = negi_lang_parse_atom(tok_i)
 
 	repeat
-		if g_tk_kinds(ti) != tk_bracket_l {
+		if g_tok_kinds(tok_i) != tok_bracket_l {
 			break
 		}
-		op_ti = ti
-		ti++
+		op_tok_i = tok_i
+		tok_i++
 
-		er = negi_lang_parse_ex(ti)
+		exp_r = negi_lang_parse_exp(tok_i)
 
-		if g_tk_kinds(ti) != tk_bracket_r {
-			el = negi_lang_ex_add_err("角カッコが閉じられていません。", op_ti)
+		if g_tok_kinds(tok_i) != tok_bracket_r {
+			exp_l = negi_lang_exp_add_err("角カッコが閉じられていません。", op_tok_i)
 			break
 		}
-		ti++
+		tok_i++
 
-		el = negi_lang_ex_add_bin(op_ix, el, er, op_ti)
+		exp_l = negi_lang_exp_add_bin(op_ix, exp_l, exp_r, op_tok_i)
 	loop
 
-	return el
+	return exp_l
 
 // トークンが演算子で、指定されたレベルを持つなら、その演算子の種類を返す。
 // そうでなければ op_err を返す。
-#defcfunc negi_lang_parse_op var ti, int op_level, \
+#defcfunc negi_lang_parse_op var tok_i, int op_level, \
 	local op_text
 
-	if g_tk_kinds(ti) != tk_op {
+	if g_tok_kinds(tok_i) != tok_op {
 		return op_err
 	}
 
-	op_text = negi_lang_tk_text(ti)
+	op_text = negi_lang_tok_text(tok_i)
 
 	if op_level == op_level_cmp {
 		if op_text == "==" {
@@ -666,58 +666,58 @@
 	return op_err
 
 // 指定されたレベルの演算子より一段階結合力が高い演算子の式をパースする。
-#defcfunc negi_lang_parse_bin_next var ti, int op_level
+#defcfunc negi_lang_parse_bin_next var tok_i, int op_level
 
 	if op_level == op_level_mul {
-		return negi_lang_parse_suffix(ti)
+		return negi_lang_parse_suffix(tok_i)
 	}
-	return negi_lang_parse_bin(ti, op_level + 1)
+	return negi_lang_parse_bin(tok_i, op_level + 1)
 
 // 指定されたレベルの演算子からなる、2項演算子の式をパースする。
-#defcfunc negi_lang_parse_bin var ti, int op_level, \
-	local el, local er, local op_text, local op, local op_ti
+#defcfunc negi_lang_parse_bin var tok_i, int op_level, \
+	local exp_l, local exp_r, local op_text, local op, local op_tok_i
 
-	el = negi_lang_parse_bin_next(ti, op_level)
+	exp_l = negi_lang_parse_bin_next(tok_i, op_level)
 
 	repeat
-		if g_tk_kinds(ti) != tk_op {
+		if g_tok_kinds(tok_i) != tok_op {
 			break
 		}
 
-		op_ti = ti
-		op = negi_lang_parse_op(ti, op_level)
+		op_tok_i = tok_i
+		op = negi_lang_parse_op(tok_i, op_level)
 		if op == op_err {
 			break
 		}
 
-		ti++
-		er = negi_lang_parse_bin_next(ti, op_level)
-		el = negi_lang_ex_add_bin(op, el, er, op_ti)
+		tok_i++
+		exp_r = negi_lang_parse_bin_next(tok_i, op_level)
+		exp_l = negi_lang_exp_add_bin(op, exp_l, exp_r, op_tok_i)
 	loop
-	return el
+	return exp_l
 
 // 指定されたトークンで始まる式をパースする。
-#defcfunc negi_lang_parse_ex var ti
-	return negi_lang_parse_bin(ti, op_level_top)
+#defcfunc negi_lang_parse_exp var tok_i
+	return negi_lang_parse_bin(tok_i, op_level_top)
 
 // 構文解析を実行する。
 #deffunc negi_lang_parse \
-	local ei, local ti
+	local exp_i, local tok_i
 
-	assert g_ex_count == 0
+	assert g_exp_count == 0
 
-	// 式番号 ei_none を無効な式を表すものとして登録する。
-	ei = negi_lang_ex_add_err("NOT AN EXPRESSION", 0)
-	assert ei == ei_none
+	// 式番号 exp_i_none を無効な式を表すものとして登録する。
+	exp_i = negi_lang_exp_add_err("NOT AN EXPRESSION", 0)
+	assert exp_i == exp_i_none
 
-	ti = 0
-	if g_tk_kinds(ti) == tk_eof {
+	tok_i = 0
+	if g_tok_kinds(tok_i) == tok_eof {
 		// 空のプログラムは 0 とみなす。
-		g_ei_root = negi_lang_ex_add_int(ex_int, 0, ti)
+		g_exp_i_root = negi_lang_exp_add_int(exp_int, 0, tok_i)
 	} else {
-		g_ei_root = negi_lang_parse_ex(ti)
+		g_exp_i_root = negi_lang_parse_exp(tok_i)
 	}
-	assert g_ei_root != ei_none
+	assert g_exp_i_root != exp_i_none
 	return
 
 // ###############################################
@@ -732,34 +732,34 @@
 // -----------------------------------------------
 
 // 命令を追加する。
-// ti: この命令と関連するトークン番号
-#deffunc negi_lang_in_add int kind, int ti
-	g_in_kinds(g_in_count) = kind
-	g_in_xs(g_in_count) = 0
-	g_in_strs(g_in_count) = ""
-	g_in_tis(g_in_count) = ti
-	g_in_count++
+// tok_i: この命令と関連するトークン番号
+#deffunc negi_lang_cmd_add int kind, int tok_i
+	g_cmd_kinds(g_cmd_count) = kind
+	g_cmd_xs(g_cmd_count) = 0
+	g_cmd_strs(g_cmd_count) = ""
+	g_cmd_tok_is(g_cmd_count) = tok_i
+	g_cmd_count++
 	return
 
 // 整数値を引数に持つ命令を追加する。
-#deffunc negi_lang_in_add_int int kind, int value, int ti
+#deffunc negi_lang_cmd_add_int int kind, int value, int tok_i
 
-	negi_lang_in_add kind, ti
-	g_in_xs(g_in_count - 1) = value
+	negi_lang_cmd_add kind, tok_i
+	g_cmd_xs(g_cmd_count - 1) = value
 	return
 
 // 文字列を引数に持つ命令を追加する。
-#deffunc negi_lang_in_add_str int kind, str value, int ti
+#deffunc negi_lang_cmd_add_str int kind, str value, int tok_i
 
-	negi_lang_in_add kind, ti
-	g_in_strs(g_in_count - 1) = value
+	negi_lang_cmd_add kind, tok_i
+	g_cmd_strs(g_cmd_count - 1) = value
 	return
 
 // 否定演算の命令を追加する。 (!x ---> x == false)
-#deffunc negi_lang_in_add_negate int ti
+#deffunc negi_lang_cmd_add_negate int tok_i
 
-	negi_lang_in_add_int in_push_int, false, ti
-	negi_lang_in_add_int in_op, op_eq, ti
+	negi_lang_cmd_add_int cmd_push_int, false, tok_i
+	negi_lang_cmd_add_int cmd_op, op_eq, tok_i
 	return
 
 // -----------------------------------------------
@@ -768,85 +768,85 @@
 
 // 2項演算を行うコードを生成する。
 // 評価の実装を簡単にするため、式を適当に変形する。
-#deffunc negi_lang_gen_ex_op int ei, \
+#deffunc negi_lang_gen_exp_op int exp_i, \
 	local op
 
-	assert g_ex_kinds(ei) == ex_op
-	op = g_ex_ints(ei)
+	assert g_exp_kinds(exp_i) == exp_op
+	op = g_exp_ints(exp_i)
 
-	negi_lang_gen_ex g_ex_els(ei)
-	negi_lang_gen_ex g_ex_ers(ei)
+	negi_lang_gen_exp g_exp_exp_ls(exp_i)
+	negi_lang_gen_exp g_exp_exp_rs(exp_i)
 
 	if op == op_ne {
 		// l != r ---> !(l == r)
-		negi_lang_in_add_int in_op, op_eq, g_ex_tis(ei)
-		negi_lang_in_add_negate g_ex_tis(ei)
+		negi_lang_cmd_add_int cmd_op, op_eq, g_exp_tok_is(exp_i)
+		negi_lang_cmd_add_negate g_exp_tok_is(exp_i)
 		return
 	}
 	if op == op_le {
 		// l <= r ---> !(r < l)
-		negi_lang_in_add in_swap, g_ex_tis(ei)
-		negi_lang_in_add_int in_op, op_lt, g_ex_tis(ei)
-		negi_lang_in_add_negate g_ex_tis(ei)
+		negi_lang_cmd_add cmd_swap, g_exp_tok_is(exp_i)
+		negi_lang_cmd_add_int cmd_op, op_lt, g_exp_tok_is(exp_i)
+		negi_lang_cmd_add_negate g_exp_tok_is(exp_i)
 		return
 	}
 	if op == op_gt {
 		// l > r ---> r < l
-		negi_lang_in_add in_swap, g_ex_tis(ei)
-		negi_lang_in_add_int in_op, op_lt, g_ex_tis(ei)
+		negi_lang_cmd_add cmd_swap, g_exp_tok_is(exp_i)
+		negi_lang_cmd_add_int cmd_op, op_lt, g_exp_tok_is(exp_i)
 		return
 	}
 	if op == op_ge {
 		// l >= r ---> !(l < r)
-		negi_lang_in_add_int in_op, op_lt, g_ex_tis(ei)
-		negi_lang_in_add_negate g_ex_tis(ei)
+		negi_lang_cmd_add_int cmd_op, op_lt, g_exp_tok_is(exp_i)
+		negi_lang_cmd_add_negate g_exp_tok_is(exp_i)
 		return
 	}
 
-	negi_lang_in_add_int in_op, op, g_ex_tis(ei)
+	negi_lang_cmd_add_int cmd_op, op, g_exp_tok_is(exp_i)
 	return
 
 // 式を計算するコードを生成する。
-#deffunc negi_lang_gen_ex int ei
+#deffunc negi_lang_gen_exp int exp_i
 
-	if g_ex_kinds(ei) == ex_int {
-		negi_lang_in_add_int in_push_int, g_ex_ints(ei), g_ex_tis(ei)
+	if g_exp_kinds(exp_i) == exp_int {
+		negi_lang_cmd_add_int cmd_push_int, g_exp_ints(exp_i), g_exp_tok_is(exp_i)
 		return
 	}
-	if g_ex_kinds(ei) == ex_str {
-		negi_lang_in_add_str in_push_str, g_ex_strs(ei), g_ex_tis(ei)
+	if g_exp_kinds(exp_i) == exp_str {
+		negi_lang_cmd_add_str cmd_push_str, g_exp_strs(exp_i), g_exp_tok_is(exp_i)
 		return
 	}
-	if g_ex_kinds(ei) == ex_array {
-		negi_lang_gen_ex g_ex_els(ei)
-		negi_lang_in_add in_push_array, g_ex_tis(ei)
+	if g_exp_kinds(exp_i) == exp_array {
+		negi_lang_gen_exp g_exp_exp_ls(exp_i)
+		negi_lang_cmd_add cmd_push_array, g_exp_tok_is(exp_i)
 		return
 	}
-	if g_ex_kinds(ei) == ex_ident {
+	if g_exp_kinds(exp_i) == exp_ident {
 		// FIXME: 変数として処理する
-		negi_lang_in_add_int in_push_int, 0, g_ex_tis(ei)
+		negi_lang_cmd_add_int cmd_push_int, 0, g_exp_tok_is(exp_i)
 		return
 	}
-	if g_ex_kinds(ei) == ex_op {
-		negi_lang_gen_ex_op ei
+	if g_exp_kinds(exp_i) == exp_op {
+		negi_lang_gen_exp_op exp_i
 		return
 	}
-	if g_ex_kinds(ei) == ex_err {
-		negi_lang_in_add_str in_err, g_ex_strs(ei), g_ex_tis(ei)
+	if g_exp_kinds(exp_i) == exp_err {
+		negi_lang_cmd_add_str cmd_err, g_exp_strs(exp_i), g_exp_tok_is(exp_i)
 		return
 	}
-	logmes "ex_kind = " + g_ex_kinds(ei)
+	logmes "exp_kind = " + g_exp_kinds(exp_i)
 	failwith "unknown expression kind"
 
 // コード生成を実行する。
 #deffunc negi_lang_gen
 
-	assert g_ei_root != ei_none
+	assert g_exp_i_root != exp_i_none
 
-	negi_lang_gen_ex g_ei_root
+	negi_lang_gen_exp g_exp_i_root
 
 	// スタックにある値を終了コードとして終了する命令を末尾に追加する。
-	negi_lang_in_add in_exit, g_tk_count - 1
+	negi_lang_cmd_add cmd_exit, g_tok_count - 1
 	return
 
 // ###############################################
@@ -864,24 +864,24 @@
 
 	logmes "push ty=" + ty + " val=" + val
 
-	if g_data_sp >= g_data_sp_max {
+	if g_data_stack_ptr >= g_data_stack_ptr_max {
 		// FIXME: エラー箇所を報告する
 		negi_lang_eval_abort "STACK OVERFLOW", 0
 		return
 	}
 
-	g_data_tys(g_data_sp) = ty
-	g_data_vals(g_data_sp) = val
-	g_data_sp++
+	g_data_tys(g_data_stack_ptr) = ty
+	g_data_vals(g_data_stack_ptr) = val
+	g_data_stack_ptr++
 	return
 
 // スタックから値を取り出す。
 #deffunc negi_lang_stack_pop var out_ty, var out_val
 
-	assert g_data_sp >= 1
-	g_data_sp--
-	out_ty = g_data_tys(g_data_sp)
-	out_val = g_data_vals(g_data_sp)
+	assert g_data_stack_ptr >= 1
+	g_data_stack_ptr--
+	out_ty = g_data_tys(g_data_stack_ptr)
+	out_val = g_data_vals(g_data_stack_ptr)
 
 	logmes "pop ty=" + out_ty + " val=" + out_val
 	return
@@ -892,15 +892,15 @@
 
 #deffunc negi_lang_heap_alloc int count, var out_dl, var out_dr
 
-	if g_data_hp + count > g_data_count {
+	if g_data_heap_ptr + count > g_data_count {
 		// FIXME: ヒープを自動で拡張する
 		negi_lang_eval_abort "OUT OF MEMORY", 0
 		return
 	}
 
-	out_dl = g_data_hp
-	out_dr = g_data_hp + count
-	g_data_hp += count
+	out_dl = g_data_heap_ptr
+	out_dr = g_data_heap_ptr + count
+	g_data_heap_ptr += count
 	return
 
 // -----------------------------------------------
@@ -927,7 +927,7 @@
 
 	negi_lang_heap_alloc capacity, dl, dr
 
-	g_array_lengths(g_array_count) = len
+	g_array_lens(g_array_count) = len
 	g_array_dls(g_array_count) = dl
 	g_array_drs(g_array_count) = dr
 	g_array_count++
@@ -941,7 +941,7 @@
 	assert array_ty == ty_array
 	assert 0 <= array_val && array_val < g_array_count
 
-	if (0 <= index && index < g_array_lengths(array_val)) == false {
+	if (0 <= index && index < g_array_lens(array_val)) == false {
 		negi_lang_eval_abort "配列の要素番号が不正です。", 0 // FIXME: 位置情報
 		return
 	}
@@ -959,7 +959,7 @@
 	assert ty == ty_array
 	assert 0 <= val && val < g_array_count
 
-	if (0 <= index && index < g_array_lengths(val)) == false {
+	if (0 <= index && index < g_array_lens(val)) == false {
 		negi_lang_eval_abort "配列の要素番号が不正です。", 0 // FIXME: 位置情報
 		return
 	}
@@ -974,27 +974,27 @@
 // -----------------------------------------------
 
 // 異常終了する。
-#deffunc negi_lang_eval_abort str message, int ti
+#deffunc negi_lang_eval_abort str message, int tok_i
 
-	negi_lang_err_add message, g_tk_sls(ti), g_tk_srs(ti)
+	negi_lang_err_add message, g_tok_src_ls(tok_i), g_tok_src_rs(tok_i)
 
 	// 終了コード 1 で停止させる。
 	negi_lang_stack_push ty_int, 1
-	g_pc = g_in_count - 1
-	assert g_in_kinds(g_pc) == in_exit
+	g_pc = g_cmd_count - 1
+	assert g_cmd_kinds(g_pc) == cmd_exit
 	return
 
 // エラー命令を処理する。
-#deffunc negi_lang_eval_err int ii
+#deffunc negi_lang_eval_err int cmd_i
 
-	assert g_in_kinds(ii) == in_err
-	negi_lang_eval_abort g_in_strs(ii), g_in_tis(ii)
+	assert g_cmd_kinds(cmd_i) == cmd_err
+	negi_lang_eval_abort g_cmd_strs(cmd_i), g_cmd_tok_is(cmd_i)
 	return
 
-#deffunc negi_lang_eval_push_array int ii, \
+#deffunc negi_lang_eval_push_array int cmd_i, \
 	local array_val, local elem_ty, local elem_val
 
-	assert g_in_kinds(ii) == in_push_array
+	assert g_cmd_kinds(cmd_i) == cmd_push_array
 	array_val = negi_lang_array_add(1, 1)
 
 	negi_lang_stack_pop elem_ty, elem_val
@@ -1004,7 +1004,7 @@
 	return
 
 // スワップ命令を処理する。スタックの上の2つの要素の順番を入れ替える。
-#deffunc negi_lang_eval_swap int ii, \
+#deffunc negi_lang_eval_swap int cmd_i, \
 	local val_l, local val_r, local ty_l, local ty_r
 
 	negi_lang_stack_pop ty_l, val_l
@@ -1014,7 +1014,7 @@
 	return
 
 // スタック上の2つの値に演算を適用し、結果をスタックに置く。
-#deffunc negi_lang_eval_op int ii, int op, \
+#deffunc negi_lang_eval_op int cmd_i, int op, \
 	local ty, local val_l, local ty_r, local val_r, local ty_t, local val_t
 
 	negi_lang_stack_pop ty_r, val_r
@@ -1033,7 +1033,7 @@
 			negi_lang_stack_push ty_int, g_strs(val_l) == g_strs(val_r)
 			return
 		}
-		negi_lang_eval_abort "type error", g_in_tis(ii)
+		negi_lang_eval_abort "type error", g_cmd_tok_is(cmd_i)
 		return
 	}
 	assert op != op_ne
@@ -1050,7 +1050,7 @@
 			negi_lang_stack_push ty_int, (g_strs(val_l) != g_strs(val_r)) < 0
 			return
 		}
-		negi_lang_eval_abort "type error", g_in_tis(ii)
+		negi_lang_eval_abort "type error", g_cmd_tok_is(cmd_i)
 		return
 	}
 	assert op != op_le
@@ -1068,12 +1068,12 @@
 			negi_lang_stack_push ty_t, val_t
 			return
 		}
-		negi_lang_eval_abort "type error", g_in_tis(ii)
+		negi_lang_eval_abort "type error", g_cmd_tok_is(cmd_i)
 		return
 	}
 
 	if ty != ty_r {
-		negi_lang_eval_abort "type error", g_in_tis(ii)
+		negi_lang_eval_abort "type error", g_cmd_tok_is(cmd_i)
 		return
 	}
 
@@ -1087,7 +1087,7 @@
 			negi_lang_stack_push ty_str, val_l
 			return
 		}
-		negi_lang_eval_abort "type error", g_in_tis(ii)
+		negi_lang_eval_abort "type error", g_cmd_tok_is(cmd_i)
 		return
 	}
 	if op == op_sub {
@@ -1095,7 +1095,7 @@
 			negi_lang_stack_push ty_int, val_l - val_r
 			return
 		}
-		negi_lang_eval_abort "type error", g_in_tis(ii)
+		negi_lang_eval_abort "type error", g_cmd_tok_is(cmd_i)
 		return
 	}
 	if op == op_mul {
@@ -1103,7 +1103,7 @@
 			negi_lang_stack_push ty_int, val_l * val_r
 			return
 		}
-		negi_lang_eval_abort "type error", g_in_tis(ii)
+		negi_lang_eval_abort "type error", g_cmd_tok_is(cmd_i)
 		return
 	}
 	if op == op_div {
@@ -1111,7 +1111,7 @@
 			negi_lang_stack_push ty_int, val_l / val_r
 			return
 		}
-		negi_lang_eval_abort "type error", g_in_tis(ii)
+		negi_lang_eval_abort "type error", g_cmd_tok_is(cmd_i)
 		return
 	}
 	if op == op_mod {
@@ -1119,7 +1119,7 @@
 			negi_lang_stack_push ty_int, val_l \ val_r
 			return
 		}
-		negi_lang_eval_abort "type error", g_in_tis(ii)
+		negi_lang_eval_abort "type error", g_cmd_tok_is(cmd_i)
 		return
 	}
 
@@ -1129,54 +1129,54 @@
 // 評価のメインループ。
 // 終了命令に到達するまで、命令のリストを1つずつ実行する。
 #deffunc negi_lang_eval_main \
-	local ii, local ty
+	local cmd_i, local ty
 
 	repeat
-		ii = g_pc
+		cmd_i = g_pc
 		g_pc++
 
-		if g_in_kinds(ii) == in_push_int {
-			negi_lang_stack_push ty_int, g_in_xs(ii)
+		if g_cmd_kinds(cmd_i) == cmd_push_int {
+			negi_lang_stack_push ty_int, g_cmd_xs(cmd_i)
 			continue
 		}
-		if g_in_kinds(ii) == in_push_str {
-			negi_lang_stack_push ty_str, negi_lang_str_add(g_in_strs(ii))
+		if g_cmd_kinds(cmd_i) == cmd_push_str {
+			negi_lang_stack_push ty_str, negi_lang_str_add(g_cmd_strs(cmd_i))
 			continue
 		}
-		if g_in_kinds(ii) == in_push_array {
-			negi_lang_eval_push_array ii
+		if g_cmd_kinds(cmd_i) == cmd_push_array {
+			negi_lang_eval_push_array cmd_i
 			continue
 		}
-		if g_in_kinds(ii) == in_swap {
-			negi_lang_eval_swap ii
+		if g_cmd_kinds(cmd_i) == cmd_swap {
+			negi_lang_eval_swap cmd_i
 			continue
 		}
-		if g_in_kinds(ii) == in_op {
-			negi_lang_eval_op ii, g_in_xs(ii)
+		if g_cmd_kinds(cmd_i) == cmd_op {
+			negi_lang_eval_op cmd_i, g_cmd_xs(cmd_i)
 			continue
 		}
-		if g_in_kinds(ii) == in_err {
-			negi_lang_eval_err ii
+		if g_cmd_kinds(cmd_i) == cmd_err {
+			negi_lang_eval_err cmd_i
 			continue
 		}
-		if g_in_kinds(ii) == in_exit {
+		if g_cmd_kinds(cmd_i) == cmd_exit {
 			// スタックの値を終了コードとする。
 			negi_lang_stack_pop ty, g_eval_exit
 			if ty != ty_int {
-				negi_lang_eval_abort "計算結果は整数値でなければいけません。", g_in_tis(ii)
+				negi_lang_eval_abort "計算結果は整数値でなければいけません。", g_cmd_tok_is(cmd_i)
 				continue
 			}
 			break
 		}
 
-		logmes "in_kind = " + g_in_kinds(ii)
-		failwith "Unknown instruction kind"
+		logmes "cmd_kind = " + g_cmd_kinds(cmd_i)
+		failwith "Unknown cmd_kind"
 	loop
 	return
 
 #deffunc negi_lang_eval
 
-	assert g_in_count != 0
+	assert g_cmd_count != 0
 
 	negi_lang_eval_main
 	return
