@@ -60,3 +60,16 @@ Git のコミットメッセージには以下のプレフィックスをつけ�
     - コメントやドキュメントを追加・変更・削除するとき
 - `chore:`
     - 開発環境にかかわる変更をするとき
+
+### 開発: 略語リスト
+
+- err: error
+- tok: token
+- exp: expression (式)
+- op: operator (演算子)
+- ty: type (型)
+- cmd: command (命令)
+- eval: evaluation (評価)
+- eof: end of file (入力の終わり)
+- ident: identifier (識別子)
+- bin: binary operator (2項演算子)
