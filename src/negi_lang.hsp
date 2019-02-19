@@ -46,11 +46,17 @@
 // 識別子を表すトークン
 #enum tk_ident
 
-// 左カッコ
+// 左丸カッコ
 #enum tk_paren_l
 
-// 右カッコ
+// 右丸カッコ
 #enum tk_paren_r
+
+// 左角カッコ
+#enum tk_bracket_l
+
+// 右角カッコ
+#enum tk_bracket_r
 
 // 演算子
 #enum tk_op
@@ -87,6 +93,7 @@
 #enum op_mul // * (multiplication)
 #enum op_div // / (division)
 #enum op_mod // % (modulo)
+#enum op_ix // [] (index)
 
 // -----------------------------------------------
 // 演算子のレベルの種類
@@ -314,7 +321,7 @@
 // -----------------------------------------------
 
 #deffunc negi_lang_tokenize \
-	local c, local l, local r
+	local c, local l, local r, local kind
 
 	assert g_tk_count == 0 // 変数が初期化済みであることを確認する。
 
@@ -386,15 +393,13 @@
 			continue
 		}
 
-		if c == '(' {
+		if c == '(' || c == ')' || c == '[' || c == ']' {
 			r++
-			negi_lang_tk_add tk_paren_l, l, r
-			continue
-		}
-
-		if c == ')' {
-			r++
-			negi_lang_tk_add tk_paren_r, l, r
+			if c == '(' { kind = tk_paren_l }
+			if c == ')' { kind = tk_paren_r }
+			if c == '[' { kind = tk_bracket_l }
+			if c == ']' { kind = tk_bracket_r }
+			negi_lang_tk_add kind, l, r
 			continue
 		}
 
@@ -517,12 +522,38 @@
 		ti++
 		ei = negi_lang_parse_ex(ti)
 		if g_tk_kinds(ti) != tk_paren_r {
-			return negi_lang_ex_add_err("右カッコが必要です。", ti)
+			return negi_lang_ex_add_err("丸カッコが閉じられていません。", ti)
 		}
 		ti++
 		return ei
 	}
 	return negi_lang_ex_add_err("Expected an expression", ti)
+
+// 後置式 (x[i] のように後ろに演算子がつけたような式) をパースする。
+#defcfunc negi_lang_parse_suffix var ti, \
+	local el, local er, local op_ti
+
+	el = negi_lang_parse_atom(ti)
+
+	repeat
+		if g_tk_kinds(ti) != tk_bracket_l {
+			break
+		}
+		op_ti = ti
+		ti++
+
+		er = negi_lang_parse_ex(ti)
+
+		if g_tk_kinds(ti) != tk_bracket_r {
+			el = negi_lang_ex_add_err("角カッコが閉じられていません。"), op_ti
+			break
+		}
+		ti++
+
+		el = negi_lang_ex_add_bin(op_ix, el, er, op_ti)
+	loop
+
+	return el
 
 // トークンが演算子で、指定されたレベルを持つなら、その演算子の種類を返す。
 // そうでなければ op_err を返す。
@@ -580,7 +611,7 @@
 #defcfunc negi_lang_parse_bin_next var ti, int op_level
 
 	if op_level == op_mul {
-		return negi_lang_parse_atom(ti)
+		return negi_lang_parse_suffix(ti)
 	}
 	return negi_lang_parse_bin(ti, op_level + 1)
 
@@ -873,6 +904,16 @@
 	assert op != op_le
 	assert op != op_gt
 	assert op != op_ge
+
+	if op == op_ix {
+		if ty == ty_str && ty_r == ty_int {
+			// FIXME: オーバーフローエラーを検出する
+			negi_lang_stack_push ty_int, peek(g_strs(val_l), val_r)
+			return
+		}
+		negi_lang_eval_abort "type error", g_in_tis(ii)
+		return
+	}
 
 	if ty != ty_r {
 		negi_lang_eval_abort "type error", g_in_tis(ii)
