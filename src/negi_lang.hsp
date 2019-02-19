@@ -827,12 +827,11 @@
 	negi_lang_stack_pop ty_r, val_r
 	negi_lang_stack_pop ty, val_l
 
-	if ty != ty_r {
-		negi_lang_eval_abort "type error", g_in_tis(ii)
-		return
-	}
-
 	if op == op_eq {
+		if ty != ty_r {
+			negi_lang_stack_push ty_int, false
+			return
+		}
 		if ty == ty_int {
 			negi_lang_stack_push ty_int, val_l == val_r
 			return
@@ -846,6 +845,10 @@
 	}
 	assert op != op_ne
 	if op == op_lt {
+		if ty != ty_r {
+			negi_lang_stack_push ty_int, ty < ty_r
+			return
+		}
 		if ty == ty_int {
 			negi_lang_stack_push ty_int, val_l < val_r
 			return
@@ -860,6 +863,11 @@
 	assert op != op_le
 	assert op != op_gt
 	assert op != op_ge
+
+	if ty != ty_r {
+		negi_lang_eval_abort "type error", g_in_tis(ii)
+		return
+	}
 
 	if op == op_add {
 		if ty == ty_int {
