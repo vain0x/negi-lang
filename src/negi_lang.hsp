@@ -817,12 +817,9 @@
 	negi_lang_stack_push ty_r, val_r
 	return
 
-// 演算命令を処理する。
-#deffunc negi_lang_eval_op int ii, \
-	local op, local val_l, local val_r, local ty, local ty_r
-
-	assert g_in_kinds(ii) == in_op
-	op = g_in_xs(ii)
+// スタック上の2つの値に演算を適用し、結果をスタックに置く。
+#deffunc negi_lang_eval_op int ii, int op, \
+	local ty, local val_l, local ty_r, local val_r
 
 	negi_lang_stack_pop ty_r, val_r
 	negi_lang_stack_pop ty, val_l
@@ -940,7 +937,7 @@
 			continue
 		}
 		if g_in_kinds(ii) == in_op {
-			negi_lang_eval_op ii
+			negi_lang_eval_op ii, g_in_xs(ii)
 			continue
 		}
 		if g_in_kinds(ii) == in_err {
