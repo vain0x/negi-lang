@@ -128,7 +128,7 @@
 // 整数。値は整数値そのもの。
 #enum ty_int
 
-// 文字列。値は g_heap_strs の要素番号。
+// 文字列。値は g_strs の要素番号。
 #enum ty_str
 
 // ###############################################
@@ -191,9 +191,9 @@
 	g_data_sp_max = g_data_count / 4
 	g_data_hp = g_data_sp_max
 
-	// ヒープ上の文字列
-	sdim g_heap_strs, 16, 1024
-	g_heap_str_count = 0
+	// 評価中に生成された文字列のリスト
+	sdim g_strs, 16, 1024
+	g_str_count = 0
 
 	// プログラムカウンタ (実行中のインストラクション番号)
 	g_pc = 0
@@ -783,20 +783,20 @@
 	g_data_sp--
 	out_ty = g_data_tys(g_data_sp)
 	out_val = g_data_vals(g_data_sp)
-	
+
 	logmes "pop ty=" + out_ty + " val=" + out_val
 	return
 
 // -----------------------------------------------
-// ヒープ
+// 文字列リスト
 // -----------------------------------------------
 
-// ヒープに文字列を追加して、その文字列を指す数値を返す。
-#defcfunc negi_lang_heap_str_add str value
+// 文字列リストに追加して、その番号を返す。
+#defcfunc negi_lang_str_add str value
 
-	g_heap_strs(g_heap_str_count) = value
-	g_heap_str_count++
-	return g_heap_str_count - 1
+	g_strs(g_str_count) = value
+	g_str_count++
+	return g_str_count - 1
 
 // -----------------------------------------------
 // 評価
@@ -847,7 +847,7 @@
 			return
 		}
 		if ty == ty_str {
-			negi_lang_stack_push ty_int, g_heap_strs(val_l) == g_heap_strs(val_r)
+			negi_lang_stack_push ty_int, g_strs(val_l) == g_strs(val_r)
 			return
 		}
 		negi_lang_eval_abort "type error", g_in_tis(ii)
@@ -864,7 +864,7 @@
 			return
 		}
 		if ty == ty_str {
-			negi_lang_stack_push ty_int, (g_heap_strs(val_l) != g_heap_strs(val_r)) < 0
+			negi_lang_stack_push ty_int, (g_strs(val_l) != g_strs(val_r)) < 0
 			return
 		}
 		negi_lang_eval_abort "type error", g_in_tis(ii)
@@ -885,7 +885,7 @@
 			return
 		}
 		if ty == ty_str {
-			val_l = negi_lang_heap_str_add(g_heap_strs(val_l) + g_heap_strs(val_r))
+			val_l = negi_lang_str_add(g_strs(val_l) + g_strs(val_r))
 			negi_lang_stack_push ty_str, val_l
 			return
 		}
@@ -942,7 +942,7 @@
 			continue
 		}
 		if g_in_kinds(ii) == in_push_str {
-			negi_lang_stack_push ty_str, negi_lang_heap_str_add(g_in_strs(ii))
+			negi_lang_stack_push ty_str, negi_lang_str_add(g_in_strs(ii))
 			continue
 		}
 		if g_in_kinds(ii) == in_swap {
