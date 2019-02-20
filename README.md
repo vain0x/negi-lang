@@ -73,3 +73,51 @@ Git のコミットメッセージには以下のプレフィックスをつけ�
 - eof: end of file (入力の終わり)
 - ident: identifier (識別子)
 - bin: binary operator (2項演算子)
+
+### 開発: 構文メモ
+
+```
+
+int = ( '+' / '-' ) [0-9]+
+
+str = ".."
+
+ident = [a-zA-Z_] [a-zA-Z0-9_]*
+
+exp = ';'* ( stmt ( ';'+ stmt )* )?
+
+block = '{' exp '}'
+
+if = 'if' '(' term ')' block ( 'else' ( if / block ) )?
+
+let = 'let' ident '=' term
+
+atom
+    = '(' term ')'
+    / int / str / ident
+    / if
+
+suffix = atom ( '[' term ']' )*
+
+bin_mul = suffix ( ( '*' / '/' / '%' ) suffix )*
+
+bin_add = bin_mul ( ( '+' / '-' ) bin_mul )*
+
+bin_cmp = bin_add ( ( '==' / '!=' / '<' / '<=' / '>' / '>=' ) bin_add )*
+
+bin_set = bin_cmp ( ( '=' ) bin_cmp )*
+
+term = bim_cmp
+
+stmt =
+    block
+    / if / let
+    / term
+
+program = exp
+
+```
+
+- 課題
+    - 代入 ('=') が右結合演算子になっているが、これは文にしたい。
+    - `if` 文の後ろにセミコロンが必要になってしまっている。
