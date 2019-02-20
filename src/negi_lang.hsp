@@ -111,6 +111,7 @@
 
 #enum op_err
 #enum op_semi // ; (semicolon)
+#enum op_set // =
 #enum op_eq // == (equal)
 #enum op_ne // != (not equal)
 #enum op_lt // < (less than)
@@ -129,7 +130,8 @@
 // -----------------------------------------------
 
 #enum op_level_top
-#enum op_level_cmp = op_level_top // comparison
+#enum op_level_set = op_level_top
+#enum op_level_cmp // comparison
 #enum op_level_add // additive
 #enum op_level_mul // multitive
 
@@ -691,6 +693,11 @@
 
 	op_text = negi_lang_tok_text(tok_i)
 
+	if op_level == op_level_set {
+		if op_text == "=" {
+			return op_set
+		}
+	}
 	if op_level == op_level_cmp {
 		if op_text == "==" {
 			return op_eq
@@ -973,6 +980,11 @@
 	assert g_exp_kinds(exp_i) == exp_op
 	op = g_exp_ints(exp_i)
 
+	if op == op_set {
+		negi_lang_gen_exp_set exp_i
+		return
+	}
+
 	negi_lang_gen_exp g_exp_exp_ls(exp_i)
 	negi_lang_gen_exp g_exp_exp_rs(exp_i)
 
@@ -1003,6 +1015,29 @@
 	}
 
 	negi_lang_cmd_add_int cmd_op, op, g_exp_tok_is(exp_i)
+	return
+
+#deffunc negi_lang_gen_exp_set int exp_i, \
+	local exp_l, local ident, local var_i
+
+	assert g_exp_kinds(exp_i) == exp_op && g_exp_ints(exp_i) == op_set
+
+	exp_l = g_exp_exp_ls(exp_i)
+	if g_exp_kinds(exp_l) != exp_ident {
+		negi_lang_cmd_add_err "代入の左辺は変数でなければいけません。", g_exp_tok_is(exp_i)
+		return
+	}
+	ident = negi_lang_tok_text(g_exp_tok_is(exp_l))
+
+	negi_lang_gen_exp g_exp_exp_rs(exp_i)
+
+	negi_lang_var_find ident, var_i
+	if var_i < 0 {
+		negi_lang_cmd_add_err "未定義の変数を使用しています。", g_exp_tok_is(exp_l)
+		return
+	}
+
+	negi_lang_cmd_add_int cmd_set, var_i, g_exp_tok_is(exp_i)
 	return
 
 #deffunc negi_lang_gen_exp_let int exp_i, \
