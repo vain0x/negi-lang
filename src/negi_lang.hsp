@@ -65,6 +65,12 @@
 // 右角カッコ
 #enum tok_bracket_r
 
+// 左波カッコ
+#enum tok_brace_l
+
+// 右波カッコ
+#enum tok_brace_r
+
 // セミコロン (semicolon)
 #enum tok_semi
 
@@ -72,6 +78,8 @@
 #enum tok_op
 
 #enum tok_let
+
+#enum tok_if
 
 // -----------------------------------------------
 // 式の種類
@@ -90,6 +98,11 @@
 
 // 識別子
 #enum exp_ident
+
+// if 式
+// exp_l: 条件
+// exp_r: then 節
+#enum exp_if
 
 // 演算式
 #enum exp_op
@@ -144,6 +157,12 @@
 
 // 終了
 #enum cmd_exit
+
+// ラベル
+#enum cmd_label
+
+// スタック上の値が false ならジャンプ
+#enum cmd_jump_unless
 
 // 整数リテラルをスタックにプッシュ
 #enum cmd_push_int
@@ -233,6 +252,12 @@
 
 	// プログラム全体からなる式の式番号
 	g_exp_i_root = exp_i_none
+
+	// ラベルのリスト
+	// cmd_i: ラベルが指す命令列上の位置
+
+	dim g_label_cmd_is
+	g_label_count = 0
 
 	// グローバル変数のリスト
 	// name: 変数名
@@ -390,9 +415,8 @@
 
 #defcfunc negi_lang_tok_detect_kind str text
 
-	if text == "let" {
-		return tok_let
-	}
+	if text == "if" { return tok_if }
+	if text == "let" { return tok_let }
 	return tok_ident
 
 // -----------------------------------------------
@@ -474,12 +498,14 @@
 			continue
 		}
 
-		if c == '(' || c == ')' || c == '[' || c == ']' || c == ';' {
+		if c == '(' || c == ')' || c == '[' || c == ']' || c == '{' || c == '}' || c == ';' {
 			r++
 			if c == '(' { kind = tok_paren_l }
 			if c == ')' { kind = tok_paren_r }
 			if c == '[' { kind = tok_bracket_l }
 			if c == ']' { kind = tok_bracket_r }
+			if c == '{' { kind = tok_brace_l }
+			if c == '}' { kind = tok_brace_r }
 			if c == ';' { kind = tok_semi }
 			negi_lang_tok_add kind, l, r
 			continue
@@ -520,12 +546,12 @@
 // トークンが項の始まりを表すか否か。
 #define ctype tok_leads_term(%1) \
 	((%1) == tok_int || (%1) == tok_str || (%1) == tok_ident \
-	|| (%1) == tok_paren_l || (%1) == tok_bracket_l \
+	|| (%1) == tok_paren_l || (%1) == tok_bracket_l || (%1) == tok_if \
 	)
 
 // トークンが文の始まりを表すか否か。
 #define ctype tok_leads_stmt(%1) \
-	(tok_leads_term(%1) || (%1) == tok_let)
+	(tok_leads_term(%1) || (%1) == tok_brace_l || (%1) == tok_let)
 
 // -----------------------------------------------
 // 式リスト
@@ -579,6 +605,14 @@
 	g_exp_exp_rs(g_exp_count - 1) = exp_r
 	return g_exp_count - 1
 
+// if 式を追加する。
+#defcfunc negi_lang_exp_add_if int cond_exp_i, int then_exp_i, int tok_i
+
+	negi_lang_exp_add exp_if, tok_i
+	g_exp_exp_ls(g_exp_count - 1) = cond_exp_i
+	g_exp_exp_rs(g_exp_count - 1) = then_exp_i
+	return g_exp_count - 1
+
 // let 式を追加する。
 #defcfunc negi_lang_exp_add_let int ident_tok_i, int init_exp_i, int tok_i
 
@@ -610,6 +644,44 @@
 	exp_i = negi_lang_exp_add_str(exp_str, text, tok_i)
 	tok_i++
 	return exp_i
+
+// ブロックをパースする。
+// `{ 文; 文; ..; 項 }`
+#defcfunc negi_lang_parse_block var tok_i, \
+	local brace_tok_i, local exp_i
+
+	assert g_tok_kinds(tok_i) == tok_brace_l
+	brace_tok_i = tok_i
+	tok_i++
+
+	exp_i = negi_lang_parse_exp(tok_i)
+
+	if g_tok_kinds(tok_i) != tok_brace_r {
+		return negi_lang_exp_add_err("波カッコが閉じられていません。", brace_tok_i)
+	}
+	tok_i++
+	return exp_i
+
+// if 式をパースする。
+// if (exp) block
+#defcfunc negi_lang_parse_if var tok_i, \
+	local if_tok_i, local cond_exp_i, local then_exp_i
+
+	assert g_tok_kinds(tok_i) == tok_if
+	if_tok_i = tok_if
+	tok_i++
+
+	if g_tok_kinds(tok_i) != tok_paren_l {
+		return negi_lang_exp_add_err("丸カッコが必要です。", tok_i)
+	}
+	cond_exp_i = negi_lang_parse_atom(tok_i)
+
+	if g_tok_kinds(tok_i) != tok_brace_l {
+		return negi_lang_exp_add_err("波カッコが必要です。", tok_i)
+	}
+	then_exp_i = negi_lang_parse_block(tok_i)
+
+	return negi_lang_exp_add_if(cond_exp_i, then_exp_i, if_tok_i)
 
 // アトム式 (分解できない式) をパースする。
 #defcfunc negi_lang_parse_atom var tok_i, \
@@ -649,6 +721,9 @@
 		}
 		tok_i++
 		return negi_lang_exp_add_array(exp_i, op_tok_i)
+	}
+	if g_tok_kinds(tok_i) == tok_if {
+		return negi_lang_parse_if(tok_i)
 	}
 
 	// 項のパースができなかったので、次のトークンが項の始まりを表すものではないことが分かる。
@@ -803,6 +878,12 @@
 
 	assert tok_leads_stmt(g_tok_kinds(tok_i))
 
+	if g_tok_kinds(tok_i) == tok_brace_l {
+		return negi_lang_parse_block(tok_i)
+	}
+	if g_tok_kinds(tok_i) == tok_if {
+		return negi_lang_parse_if(tok_i)
+	}
 	if g_tok_kinds(tok_i) == tok_let {
 		return negi_lang_parse_let(tok_i)
 	}
@@ -814,7 +895,7 @@
 // 末尾にあるセミコロンの後ろには 0 を補う。例えば `x ;;` は `x ; 0` として扱う。
 // 式がなければ exp_i_none を返す。
 #defcfunc negi_lang_exp_semi var tok_i, \
-	local kind, local exp_l, local exp_r, local initial_tok_i
+	local kind, local exp_l, local exp_r, local initial_tok_i, local require_semi
 
 	repeat
 		// ; nanika ---> nanika
@@ -888,6 +969,21 @@
 
 // 抽象構文木を辿って、中間言語の命令リストを生成する。
 // 中間言語はよくあるスタックマシン。
+
+// -----------------------------------------------
+// ラベルリスト
+// -----------------------------------------------
+
+#defcfunc negi_lang_label_add
+
+	g_label_cmd_is(g_label_count) = -1
+	g_label_count++
+	return g_label_count - 1
+
+#deffunc negi_lang_label_set int label_i, int cmd_i
+
+	g_label_cmd_is(label_i) = cmd_i
+	return
 
 // -----------------------------------------------
 // 変数リスト
@@ -970,6 +1066,34 @@
 	}
 
 	negi_lang_cmd_add_int cmd_var, var_i, g_exp_tok_is(exp_i)
+	return
+
+#deffunc negi_lang_gen_exp_if int exp_i, \
+	local cond_exp_i, local then_exp_i, local else_label_i, local end_label_i, local tok_i
+
+	assert g_exp_kinds(exp_i) == exp_if
+	cond_exp_i = g_exp_exp_ls(exp_i)
+	then_exp_i = g_exp_exp_rs(exp_i)
+	tok_i = g_exp_tok_is(exp_i)
+
+	else_label_i = negi_lang_label_add()
+	end_label_i = negi_lang_label_add()
+
+	// if cond == false : goto *l_else
+	negi_lang_gen_exp cond_exp_i
+	negi_lang_cmd_add_int cmd_jump_unless, else_label_i, tok_i
+
+	// do `then` : goto *l_end
+	negi_lang_gen_exp then_exp_i
+	negi_lang_cmd_add_int cmd_push_int, false, tok_i
+	negi_lang_cmd_add_int cmd_jump_unless, end_label_i, tok_i
+
+	// *l_else: do `else`
+	negi_lang_cmd_add_int cmd_label, else_label_i, tok_i
+	negi_lang_cmd_add_int cmd_push_int, 0, tok_i
+
+	// *l_end
+	negi_lang_cmd_add_int cmd_label, end_label_i, tok_i
 	return
 
 // 2項演算を行うコードを生成する。
@@ -1075,6 +1199,10 @@
 		negi_lang_gen_exp_ident exp_i
 		return
 	}
+	if g_exp_kinds(exp_i) == exp_if {
+		negi_lang_gen_exp_if exp_i
+		return
+	}
 	if g_exp_kinds(exp_i) == exp_op {
 		negi_lang_gen_exp_op exp_i
 		return
@@ -1099,6 +1227,13 @@
 
 	// スタックにある値を終了コードとして終了する命令を末尾に追加する。
 	negi_lang_cmd_add cmd_exit, g_tok_count - 1
+
+	// ラベルを解決する。
+	repeat g_cmd_count
+		if g_cmd_kinds(cnt) == cmd_label {
+			negi_lang_label_set g_cmd_xs(cnt), cnt
+		}
+	loop
 	return
 
 // ###############################################
@@ -1281,6 +1416,24 @@
 	negi_lang_stack_push ty, val
 	return
 
+#deffunc negi_lang_eval_jump_unless int cmd_i, \
+	local cond_ty, local cond_val, local label_i
+
+	assert g_cmd_kinds(cmd_i) == cmd_jump_unless
+	label_i = g_cmd_xs(cmd_i)
+
+	negi_lang_stack_pop cond_ty, cond_val
+	if cond_ty != ty_int {
+		negi_lang_eval_abort "条件の型が不正です。", g_cmd_tok_is(cmd_i)
+		return
+	}
+
+	if cond_val == false {
+		g_pc = g_label_cmd_is(label_i)
+		assert g_cmd_kinds(g_pc) == cmd_label
+	}
+	return
+
 // スワップ命令を処理する。スタックの上の2つの要素の順番を入れ替える。
 #deffunc negi_lang_eval_swap int cmd_i, \
 	local val_l, local val_r, local ty_l, local ty_r
@@ -1447,6 +1600,10 @@
 			negi_lang_eval_var cmd_i
 			continue
 		}
+		if g_cmd_kinds(cmd_i) == cmd_jump_unless {
+			negi_lang_eval_jump_unless cmd_i
+			continue
+		}
 		if g_cmd_kinds(cmd_i) == cmd_swap {
 			negi_lang_eval_swap cmd_i
 			continue
@@ -1471,6 +1628,9 @@
 				continue
 			}
 			break
+		}
+		if g_cmd_kinds(cmd_i) == cmd_label {
+			continue
 		}
 
 		logmes "cmd_kind = " + g_cmd_kinds(cmd_i)
