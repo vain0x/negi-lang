@@ -123,7 +123,7 @@ let = 'let' ident '=' term
 
 stmt =
     let
-    / while
+    / while / 'break'
     / term
 
 exp = ( ';'* stmt )* ';'*
