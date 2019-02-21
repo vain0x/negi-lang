@@ -111,7 +111,7 @@ bin_add = bin_mul ( ( '+' / '-' ) bin_mul )*
 
 bin_cmp = bin_add ( ( '==' / '!=' / '<' / '<=' / '>' / '>=' ) bin_add )*
 
-bin_set = bin_cmp ( ( '=' ) bin_cmp )*
+bin_set = bin_cmp ( '=' term )?
 
 term =
     if
@@ -128,6 +128,3 @@ exp = ( ';'* stmt )* ';'*
 program = exp
 
 ```
-
-- 課題
-    - 代入 ('=') が右結合演算子になっているが、これは文にしたい。

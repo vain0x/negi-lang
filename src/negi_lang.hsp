@@ -142,8 +142,7 @@
 // 演算子のレベルの種類
 // -----------------------------------------------
 
-#enum op_level_top
-#enum op_level_set = op_level_top
+#enum op_level_set
 #enum op_level_cmp // comparison
 #enum op_level_add // additive
 #enum op_level_mul // multitive
@@ -837,12 +836,29 @@
 	loop
 	return exp_l
 
+// 代入式をパースする。
+#defcfunc negi_lang_parse_set var tok_i, int op_level, \
+	local exp_l, local exp_r, local op_text, local op, local op_tok_i
+
+	exp_l = negi_lang_parse_bin(tok_i, op_level_cmp)
+
+	if g_tok_kinds(tok_i) == tok_op {
+		op_tok_i = tok_i
+		op = negi_lang_parse_op(tok_i, op_level_set)
+		if op != op_err {
+			tok_i++
+			exp_r = negi_lang_parse_term(tok_i)
+			exp_l = negi_lang_exp_add_bin(op, exp_l, exp_r, op_tok_i)
+		}
+	}
+	return exp_l
+
 #defcfunc negi_lang_parse_term var tok_i
 
 	if g_tok_kinds(tok_i) == tok_if {
 		return negi_lang_parse_if(tok_i)
 	}
-	return negi_lang_parse_bin(tok_i, op_level_top)
+	return negi_lang_parse_set(tok_i)
 
 #defcfunc negi_lang_parse_let var tok_i, \
 	local let_tok_i, local ident_tok_i, local init_exp_i
