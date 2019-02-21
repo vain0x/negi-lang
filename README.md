@@ -102,7 +102,7 @@ while = 'while' '(' term ')' block
 
 atom
     = '(' term ')'
-    / '[' term ']'
+    / '[' list ']'
     / int / str / ident
 
 suffix = atom ( '[' term ']' )*
@@ -118,6 +118,8 @@ bin_set = bin_cmp ( '=' term )?
 term =
     if
     / bin_set
+
+list = ( term ( ',' term )* )?
 
 let = 'let' ident '=' term
 

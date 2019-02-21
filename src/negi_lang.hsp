@@ -71,6 +71,9 @@
 // 右波カッコ
 #enum tok_brace_r
 
+// カンマ
+#enum tok_comma
+
 // セミコロン (semicolon)
 #enum tok_semi
 
@@ -100,6 +103,7 @@
 #enum exp_str
 
 // 配列リテラル
+// int: 長さ
 #enum exp_array
 
 // 識別子
@@ -150,6 +154,11 @@
 #enum op_mod // % (modulo)
 #enum op_ix // [] (index)
 
+// 以下の演算子はコンパイラによって生成される。
+
+// 配列の末尾に要素を追加する。
+#enum op_array_push
+
 // -----------------------------------------------
 // 演算子のレベルの種類
 // -----------------------------------------------
@@ -190,7 +199,8 @@
 // 文字列リテラルをスタックにプッシュ
 #enum cmd_push_str
 
-// 配列リテラルをスタックにプッシュ
+// 空の配列を生成してプッシュする
+// x: キャパシティ
 #enum cmd_push_array
 
 // 変数の値を読み取る
@@ -533,7 +543,7 @@
 			continue
 		}
 
-		if c == '(' || c == ')' || c == '[' || c == ']' || c == '{' || c == '}' || c == ';' {
+		if c == '(' || c == ')' || c == '[' || c == ']' || c == '{' || c == '}' || c == ',' || c == ';' {
 			r++
 			if c == '(' { kind = tok_paren_l }
 			if c == ')' { kind = tok_paren_r }
@@ -541,6 +551,7 @@
 			if c == ']' { kind = tok_bracket_r }
 			if c == '{' { kind = tok_brace_l }
 			if c == '}' { kind = tok_brace_r }
+			if c == ',' { kind = tok_comma }
 			if c == ';' { kind = tok_semi }
 			negi_lang_tok_add kind, l, r
 			continue
@@ -618,12 +629,6 @@
 	g_exp_strs(g_exp_count - 1) = value
 	return g_exp_count - 1
 
-#defcfunc negi_lang_exp_add_array int exp_l, int tok_i
-
-	negi_lang_exp_add exp_array, tok_i
-	g_exp_exp_ls(g_exp_count - 1) = exp_l
-	return g_exp_count - 1
-
 // エラーを表す式を追加する。
 #defcfunc negi_lang_exp_add_err str message, int tok_i
 
@@ -688,6 +693,34 @@
 	exp_i = negi_lang_exp_add_str(exp_str, text, tok_i)
 	tok_i++
 	return exp_i
+
+// カンマで区切られた term の並びを配列リテラルとしてパースする。
+#defcfunc negi_lang_parse_list var tok_i, int bracket_tok_i, \
+	local create_exp_i, local exp_l, local exp_r, local len, \
+	local kind, local elem_tok_i
+
+	create_exp_i = negi_lang_exp_add_int(exp_array, 0, bracket_tok_i)
+	exp_l = create_exp_i
+
+	repeat
+		elem_tok_i = tok_i
+		kind = g_tok_kinds(tok_i)
+		if tok_leads_term(kind) == false {
+			break
+		}
+
+		exp_r = negi_lang_parse_term(tok_i)
+		exp_l = negi_lang_exp_add_bin(op_array_push, exp_l, exp_r, elem_tok_i)
+		len++
+
+		if g_tok_kinds(tok_i) != tok_comma {
+			break
+		}
+		tok_i++
+	loop
+
+	g_exp_ints(create_exp_i) = len
+	return exp_l
 
 #defcfunc negi_lang_parse_block var tok_i, \
 	local brace_tok_i, local exp_i
@@ -797,12 +830,14 @@
 	if g_tok_kinds(tok_i) == tok_bracket_l {
 		op_tok_i = tok_i
 		tok_i++
-		exp_i = negi_lang_parse_term(tok_i)
+
+		exp_i = negi_lang_parse_list(tok_i, op_tok_i)
+
 		if g_tok_kinds(tok_i) != tok_bracket_r {
 			return negi_lang_exp_add_err("角カッコが閉じられていません。", op_tok_i)
 		}
 		tok_i++
-		return negi_lang_exp_add_array(exp_i, op_tok_i)
+		return exp_i
 	}
 
 	// 項のパースができなかったので、次のトークンが項の始まりを表すものではないことが分かる。
@@ -1042,7 +1077,7 @@
 
 	assert g_exp_count == 0
 
-	// 式番号 exp_i_none を無効な式を表すものとして登録する。
+	// 特定の式を登録する。
 	exp_i = negi_lang_exp_add_err("NOT AN EXPRESSION", 0)
 	assert exp_i == exp_i_none
 
@@ -1330,8 +1365,7 @@
 		return
 	}
 	if g_exp_kinds(exp_i) == exp_array {
-		negi_lang_gen_exp g_exp_exp_ls(exp_i)
-		negi_lang_cmd_add cmd_push_array, g_exp_tok_is(exp_i)
+		negi_lang_cmd_add_int cmd_push_array, g_exp_ints(exp_i), g_exp_tok_is(exp_i)
 		return
 	}
 	if g_exp_kinds(exp_i) == exp_ident {
@@ -1483,6 +1517,23 @@
 	g_array_count++
 	return g_array_count - 1
 
+// 配列の末尾に要素を追加する。
+#deffunc negi_lang_array_push \
+	int array_ty, int array_val, int elem_ty, int elem_val, \
+	local index
+
+	assert array_ty == ty_array
+	index = g_array_lens(array_val)
+
+	if index >= g_array_drs(array_val) - g_array_dls(array_val) {
+		failwith "配列の要素数が限界を超えました。配列の拡張は未実装です。"
+		return
+	}
+
+	g_array_lens(array_val)++
+	negi_lang_array_set array_ty, array_val, index, elem_ty, elem_val
+	return
+
 // 配列の index 番目の要素を設定する。
 #deffunc negi_lang_array_set \
 	int array_ty, int array_val, int index, int elem_ty, int elem_val, \
@@ -1542,14 +1593,12 @@
 	return
 
 #deffunc negi_lang_eval_push_array int cmd_i, \
-	local array_val, local elem_ty, local elem_val
+	local array_val, local len, local elem_ty, local elem_val
 
 	assert g_cmd_kinds(cmd_i) == cmd_push_array
-	array_val = negi_lang_array_add(1, 1)
+	len = g_cmd_xs(cmd_i)
 
-	negi_lang_stack_pop elem_ty, elem_val
-	negi_lang_array_set ty_array, array_val, 0, elem_ty, elem_val
-
+	array_val = negi_lang_array_add(0, len)
 	negi_lang_stack_push ty_array, array_val
 	return
 
@@ -1679,6 +1728,12 @@
 			return
 		}
 		negi_lang_eval_abort "type error", g_cmd_tok_is(cmd_i)
+		return
+	}
+	if op == op_array_push {
+		assert ty == ty_array
+		negi_lang_array_push ty, val_l, ty_r, val_r
+		negi_lang_stack_push ty, val_l
 		return
 	}
 
