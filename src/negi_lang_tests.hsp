@@ -210,6 +210,25 @@
 			a
 		}
 	"}, "", 2
+	eval_test "else が使える", {"
+		let a = 1;
+		let b = if (0 != 0) { a = 2; 20 } else { a = 3; 30 };
+		a + b
+	"}, "", 33
+	eval_test "else-if が使える", {"
+		let x = 10;
+		let s = "";
+		if (x % 15 == 0) {
+			s = s + "Fizz Buzz"
+		} else if (x % 3 == 0) {
+			s = s + "Fizz"
+		} else if (x % 5 == 0) {
+			s = s + "Buzz"
+		} else {
+			s = s + "10"
+		}
+		s == "Buzz"
+	"}, "", 1
 
 	test_end
 	return

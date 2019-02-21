@@ -81,6 +81,8 @@
 
 #enum tok_if
 
+#enum tok_else
+
 // -----------------------------------------------
 // 式の種類
 // -----------------------------------------------
@@ -240,8 +242,10 @@
 	// kind: 種類
 	// int: 式に関連する整数値
 	// exp_l, exp_r: 式の左辺と右辺を指す式番号
+	// exp_conds: if の条件の式番号
 	// tok_i: 式に関連するトークン番号
 	dim g_exp_kinds
+	dim g_exp_exp_conds
 	dim g_exp_exp_ls
 	dim g_exp_exp_rs
 	dim g_exp_ints
@@ -415,6 +419,7 @@
 #defcfunc negi_lang_tok_detect_kind str text
 
 	if text == "if" { return tok_if }
+	if text == "else" { return tok_else }
 	if text == "let" { return tok_let }
 	return tok_ident
 
@@ -561,6 +566,7 @@
 	g_exp_kinds(g_exp_count) = kind
 	g_exp_exp_ls(g_exp_count) = exp_i_none
 	g_exp_exp_rs(g_exp_count) = exp_i_none
+	g_exp_exp_conds(g_exp_count) = exp_i_none
 	g_exp_ints(g_exp_count) = 0
 	g_exp_strs(g_exp_count) = ""
 	g_exp_tok_is(g_exp_count) = tok_i
@@ -605,11 +611,12 @@
 	return g_exp_count - 1
 
 // if 式を追加する。
-#defcfunc negi_lang_exp_add_if int cond_exp_i, int then_exp_i, int tok_i
+#defcfunc negi_lang_exp_add_if int cond_exp_i, int then_exp_i, int else_exp_i, int tok_i
 
 	negi_lang_exp_add exp_if, tok_i
-	g_exp_exp_ls(g_exp_count - 1) = cond_exp_i
-	g_exp_exp_rs(g_exp_count - 1) = then_exp_i
+	g_exp_exp_conds(g_exp_count - 1) = cond_exp_i
+	g_exp_exp_ls(g_exp_count - 1) = then_exp_i
+	g_exp_exp_rs(g_exp_count - 1) = else_exp_i
 	return g_exp_count - 1
 
 // let 式を追加する。
@@ -660,7 +667,7 @@
 	return exp_i
 
 #defcfunc negi_lang_parse_if var tok_i, \
-	local if_tok_i, local cond_exp_i, local then_exp_i
+	local if_tok_i, local cond_exp_i, local then_exp_i, local else_exp_i
 
 	assert g_tok_kinds(tok_i) == tok_if
 	if_tok_i = tok_if
@@ -676,7 +683,22 @@
 	}
 	then_exp_i = negi_lang_parse_block(tok_i)
 
-	return negi_lang_exp_add_if(cond_exp_i, then_exp_i, if_tok_i)
+	if g_tok_kinds(tok_i) == tok_else {
+		tok_i++
+
+		if g_tok_kinds(tok_i) == tok_if {
+			else_exp_i = negi_lang_parse_if(tok_i)
+		} else : if g_tok_kinds(tok_i) == tok_brace_l {
+			else_exp_i = negi_lang_parse_block(tok_i)
+		} else {
+			else_exp_i = negi_lang_exp_add_err("if または波カッコが必要です。", tok_i)
+		}
+	} else {
+		// if (p) { x } ---> if (p) { x } else { 0 }
+		else_exp_i = negi_lang_exp_add_int(exp_int, 0, if_tok_i)
+	}
+
+	return negi_lang_exp_add_if(cond_exp_i, then_exp_i, else_exp_i, if_tok_i)
 
 #defcfunc negi_lang_parse_atom var tok_i, \
 	local value, local exp_i, local op_tok_i
@@ -1069,11 +1091,13 @@
 	return
 
 #deffunc negi_lang_gen_exp_if int exp_i, \
-	local cond_exp_i, local then_exp_i, local else_label_i, local end_label_i, local tok_i
+	local cond_exp_i, local then_exp_i, local else_exp_i, \
+	local else_label_i, local end_label_i, local tok_i
 
 	assert g_exp_kinds(exp_i) == exp_if
-	cond_exp_i = g_exp_exp_ls(exp_i)
-	then_exp_i = g_exp_exp_rs(exp_i)
+	cond_exp_i = g_exp_exp_conds(exp_i)
+	then_exp_i = g_exp_exp_ls(exp_i)
+	else_exp_i = g_exp_exp_rs(exp_i)
 	tok_i = g_exp_tok_is(exp_i)
 
 	else_label_i = negi_lang_label_add()
@@ -1090,7 +1114,7 @@
 
 	// *l_else: do `else`
 	negi_lang_cmd_add_int cmd_label, else_label_i, tok_i
-	negi_lang_cmd_add_int cmd_push_int, 0, tok_i
+	negi_lang_gen_exp else_exp_i
 
 	// *l_end
 	negi_lang_cmd_add_int cmd_label, end_label_i, tok_i
