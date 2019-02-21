@@ -555,7 +555,7 @@
 
 // トークンが文の始まりを表すか否か。
 #define ctype tok_leads_stmt(%1) \
-	(tok_leads_term(%1) || (%1) == tok_brace_l || (%1) == tok_let)
+	(tok_leads_term(%1)  || (%1) == tok_let)
 
 // -----------------------------------------------
 // 式リスト
