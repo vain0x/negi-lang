@@ -98,6 +98,8 @@ block = '{' exp '}'
 
 if = 'if' '(' term ')' block ( 'else' ( if / block ) )?
 
+while = 'while' '(' term ')' block
+
 atom
     = '(' term ')'
     / '[' term ']'
@@ -121,6 +123,7 @@ let = 'let' ident '=' term
 
 stmt =
     let
+    / while
     / term
 
 exp = ( ';'* stmt )* ';'*

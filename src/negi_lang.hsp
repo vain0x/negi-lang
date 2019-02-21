@@ -83,6 +83,8 @@
 
 #enum tok_else
 
+#enum tok_while
+
 // -----------------------------------------------
 // 式の種類
 // -----------------------------------------------
@@ -102,8 +104,8 @@
 #enum exp_ident
 
 // if 式
-// exp_l: 条件
-// exp_r: then 節
+// exp_cond: 条件
+// exp_l, exp_r: then, else
 #enum exp_if
 
 // 演算式
@@ -113,6 +115,10 @@
 // int: 定義される識別子のトークン番号
 // exp_r: 初期化式
 #enum exp_let
+
+// exp_cond: 条件式
+// exp_l: 本体
+#enum exp_while
 
 // -----------------------------------------------
 // 無効な式番号
@@ -176,6 +182,9 @@
 
 // 変数の値を読み取る
 #enum cmd_var
+
+// スタックの一番上の要素を捨てる
+#enum cmd_pop
 
 // スタック上の2つの要素を交換
 #enum cmd_swap
@@ -420,6 +429,7 @@
 
 	if text == "if" { return tok_if }
 	if text == "else" { return tok_else }
+	if text == "while" { return tok_while }
 	if text == "let" { return tok_let }
 	return tok_ident
 
@@ -555,7 +565,7 @@
 
 // トークンが文の始まりを表すか否か。
 #define ctype tok_leads_stmt(%1) \
-	(tok_leads_term(%1)  || (%1) == tok_let)
+	(tok_leads_term(%1)  || (%1) == tok_let || (%1) == tok_while)
 
 // -----------------------------------------------
 // 式リスト
@@ -625,6 +635,13 @@
 	negi_lang_exp_add exp_let, tok_i
 	g_exp_ints(g_exp_count - 1) = ident_tok_i
 	g_exp_exp_rs(g_exp_count - 1) = init_exp_i
+	return g_exp_count - 1
+
+#defcfunc negi_lang_exp_add_while int cond_exp_i, int body_exp_i, int tok_i
+
+	negi_lang_exp_add exp_while, tok_i
+	g_exp_exp_conds(g_exp_count - 1) = cond_exp_i
+	g_exp_exp_ls(g_exp_count - 1) = body_exp_i
 	return g_exp_count - 1
 
 // -----------------------------------------------
@@ -699,6 +716,25 @@
 	}
 
 	return negi_lang_exp_add_if(cond_exp_i, then_exp_i, else_exp_i, if_tok_i)
+
+#defcfunc negi_lang_parse_while var tok_i, \
+	local while_tok_i, local cond_exp_i, local body_exp_i
+
+	assert g_tok_kinds(tok_i) == tok_while
+	while_tok_i = tok_if
+	tok_i++
+
+	if g_tok_kinds(tok_i) != tok_paren_l {
+		return negi_lang_exp_add_err("丸カッコが必要です。", tok_i)
+	}
+	cond_exp_i = negi_lang_parse_atom(tok_i)
+
+	if g_tok_kinds(tok_i) != tok_brace_l {
+		return negi_lang_exp_add_err("波カッコが必要です。", tok_i)
+	}
+	body_exp_i = negi_lang_parse_block(tok_i)
+
+	return negi_lang_exp_add_while(cond_exp_i, body_exp_i, while_tok_i)
 
 #defcfunc negi_lang_parse_atom var tok_i, \
 	local value, local exp_i, local op_tok_i
@@ -911,6 +947,9 @@
 	if g_tok_kinds(tok_i) == tok_let {
 		return negi_lang_parse_let(tok_i)
 	}
+	if g_tok_kinds(tok_i) == tok_while {
+		return negi_lang_parse_while(tok_i)
+	}
 	return negi_lang_parse_term(tok_i)
 
 // セミコロン式をパースする。
@@ -1120,6 +1159,40 @@
 	negi_lang_cmd_add_int cmd_label, end_label_i, tok_i
 	return
 
+// while 式のコードを生成する。
+// スタックに何らかの値をちょうど1つ積んだ状態で終了するように気をつける。
+#deffunc negi_lang_gen_exp_while int exp_i, \
+	local cond_exp_i, local body_exp_i, \
+	local begin_label_i, local else_label_i, local tok_i
+
+	assert g_exp_kinds(exp_i) == exp_while
+	cond_exp_i = g_exp_exp_conds(exp_i)
+	body_exp_i = g_exp_exp_ls(exp_i)
+	tok_i = g_exp_tok_is(exp_i)
+	assert cond_exp_i != exp_i_none
+	assert body_exp_i != exp_i_none
+
+	begin_label_i = negi_lang_label_add()
+	else_label_i = negi_lang_label_add()
+
+	// *l_begin : if cond == false : goto *l_else
+	negi_lang_cmd_add_int cmd_label, begin_label_i, tok_i
+
+	negi_lang_gen_exp cond_exp_i
+	negi_lang_cmd_add_int cmd_jump_unless, else_label_i, tok_i
+
+	// do `then` : pop : goto *l_begin
+	negi_lang_gen_exp body_exp_i
+	negi_lang_cmd_add cmd_pop, tok_i
+
+	negi_lang_cmd_add_int cmd_push_int, false, tok_i
+	negi_lang_cmd_add_int cmd_jump_unless, begin_label_i, tok_i
+
+	// *l_else : do `else`
+	negi_lang_cmd_add_int cmd_label, else_label_i, tok_i
+	negi_lang_cmd_add_int cmd_push_int, 0, tok_i
+	return
+
 // 2項演算を行うコードを生成する。
 // 評価の実装を簡単にするため、式を適当に変形する。
 #deffunc negi_lang_gen_exp_op int exp_i, \
@@ -1225,6 +1298,10 @@
 	}
 	if g_exp_kinds(exp_i) == exp_if {
 		negi_lang_gen_exp_if exp_i
+		return
+	}
+	if g_exp_kinds(exp_i) == exp_while {
+		negi_lang_gen_exp_while exp_i
 		return
 	}
 	if g_exp_kinds(exp_i) == exp_op {
@@ -1602,7 +1679,7 @@
 // 評価のメインループ。
 // 終了命令に到達するまで、命令のリストを1つずつ実行する。
 #deffunc negi_lang_eval_main \
-	local cmd_i, local ty
+	local cmd_i, local ty, local val
 
 	repeat
 		cmd_i = g_pc
@@ -1626,6 +1703,10 @@
 		}
 		if g_cmd_kinds(cmd_i) == cmd_jump_unless {
 			negi_lang_eval_jump_unless cmd_i
+			continue
+		}
+		if g_cmd_kinds(cmd_i) == cmd_pop {
+			negi_lang_stack_pop ty, val
 			continue
 		}
 		if g_cmd_kinds(cmd_i) == cmd_swap {

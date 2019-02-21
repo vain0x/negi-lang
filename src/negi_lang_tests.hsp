@@ -230,6 +230,14 @@
 		s == "Buzz"
 	"}, "", 1
 
+	eval_test "while が使える", {"
+		let i = 0;
+		while (i < 10) {
+			i = i + 1
+		}
+		i
+	"}, "", 10
+
 	test_end
 	return
 
