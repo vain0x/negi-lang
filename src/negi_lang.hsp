@@ -645,8 +645,6 @@
 	tok_i++
 	return exp_i
 
-// ブロックをパースする。
-// `{ 文; 文; ..; 項 }`
 #defcfunc negi_lang_parse_block var tok_i, \
 	local brace_tok_i, local exp_i
 
@@ -662,8 +660,6 @@
 	tok_i++
 	return exp_i
 
-// if 式をパースする。
-// if (exp) block
 #defcfunc negi_lang_parse_if var tok_i, \
 	local if_tok_i, local cond_exp_i, local then_exp_i
 
@@ -683,7 +679,6 @@
 
 	return negi_lang_exp_add_if(cond_exp_i, then_exp_i, if_tok_i)
 
-// アトム式 (分解できない式) をパースする。
 #defcfunc negi_lang_parse_atom var tok_i, \
 	local value, local exp_i, local op_tok_i
 
@@ -721,9 +716,6 @@
 		}
 		tok_i++
 		return negi_lang_exp_add_array(exp_i, op_tok_i)
-	}
-	if g_tok_kinds(tok_i) == tok_if {
-		return negi_lang_parse_if(tok_i)
 	}
 
 	// 項のパースができなかったので、次のトークンが項の始まりを表すものではないことが分かる。
@@ -845,12 +837,13 @@
 	loop
 	return exp_l
 
-// 項をパースする。
-// 2項演算など、丸カッコの中にかけるような式をここでは項と呼ぶことにする。
 #defcfunc negi_lang_parse_term var tok_i
+
+	if g_tok_kinds(tok_i) == tok_if {
+		return negi_lang_parse_if(tok_i)
+	}
 	return negi_lang_parse_bin(tok_i, op_level_top)
 
-// let 式をパースする。
 #defcfunc negi_lang_parse_let var tok_i, \
 	local let_tok_i, local ident_tok_i, local init_exp_i
 
@@ -873,30 +866,22 @@
 
 	return negi_lang_exp_add_let(ident_tok_i, init_exp_i, let_tok_i)
 
-// 文をパースする。
 #defcfunc negi_lang_parse_stmt var tok_i
 
 	assert tok_leads_stmt(g_tok_kinds(tok_i))
 
-	if g_tok_kinds(tok_i) == tok_brace_l {
-		return negi_lang_parse_block(tok_i)
-	}
-	if g_tok_kinds(tok_i) == tok_if {
-		return negi_lang_parse_if(tok_i)
-	}
 	if g_tok_kinds(tok_i) == tok_let {
 		return negi_lang_parse_let(tok_i)
 	}
 	return negi_lang_parse_term(tok_i)
 
 // セミコロン式をパースする。
-// 文をセミコロンで区切って並べたものを、ここではセミコロン式と呼んでいる。
-// 冗長なセミコロンは無視する。例えば `;; x ;; y` は `x ; y` と同じとして扱う。
-// 末尾にあるセミコロンの後ろには 0 を補う。例えば `x ;;` は `x ; 0` として扱う。
-// 式がなければ exp_i_none を返す。
+// 末尾にあるセミコロンの後ろには 0 を補う。例えば `x;` は `x; 0` として扱う。
+// 式がなければ 0 として扱う。
 #defcfunc negi_lang_exp_semi var tok_i, \
-	local kind, local exp_l, local exp_r, local initial_tok_i, local require_semi
+	local kind, local exp_l, local exp_r, local semi_tok_i
 
+	// セミコロンを読み飛ばす。
 	repeat
 		// ; nanika ---> nanika
 		if g_tok_kinds(tok_i) != tok_semi { break }
@@ -905,28 +890,30 @@
 
 	kind = g_tok_kinds(tok_i)
 	if tok_leads_stmt(kind) == false {
-		return exp_i_none
+		return negi_lang_exp_add_int(exp_int, 0, semi_tok_i)
 	}
 
 	exp_l = negi_lang_parse_stmt(tok_i)
 
 	repeat
-		initial_tok_i = tok_i
+		semi_tok_i = tok_i
 
-		if g_tok_kinds(tok_i) != tok_semi { break }
-		tok_i++
-
-		if g_tok_kinds(tok_i) == tok_semi {
-			// ;; ---> ;
-			continue
-		}
+		// セミコロンを読み飛ばす。
+		repeat
+			// ; nanika ---> nanika
+			if g_tok_kinds(tok_i) != tok_semi { break }
+			tok_i++
+		loop
 
 		kind = g_tok_kinds(tok_i)
-		if tok_leads_stmt(kind) == false {
-			// nanika ; --> nanika ; 0
-			exp_r = negi_lang_exp_add_int(exp_int, 0, initial_tok_i)
+		if tok_leads_stmt(kind) == false && semi_tok_i != tok_i {
+			// nanika ; ---> nanika ; 0
+			exp_r = negi_lang_exp_add_int(exp_int, 0, semi_tok_i)
 			exp_l = negi_lang_exp_add_bin(op_semi, exp_l, exp_r)
-			continue
+			break
+		}
+		if tok_leads_stmt(kind) == false {
+			break
 		}
 
 		exp_r = negi_lang_parse_stmt(tok_i)
@@ -951,11 +938,8 @@
 
 	tok_i = 0
 	g_exp_i_root = negi_lang_parse_exp(tok_i)
+	assert g_exp_i_root != exp_i_none
 
-	if g_exp_i_root == exp_i_none {
-		// 空のプログラムは 0 とみなす。
-		g_exp_i_root = negi_lang_exp_add_int(exp_int, 0, tok_i)
-	}
 	if g_tok_kinds(tok_i) != tok_eof {
 		logmes "tok_i = " + tok_i
 		logmes "tok_kind = " + g_tok_kinds(tok_i)
