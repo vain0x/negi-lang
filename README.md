@@ -116,9 +116,7 @@ bin_set = bin_cmp ( '=' term )?
 
 cond = bin_set ( '?' term ':' term )?
 
-term =
-    if
-    / cond
+term = cond
 
 list = ( term ( ',' term )* )?
 
@@ -126,7 +124,7 @@ let = 'let' ident '=' term
 
 stmt =
     let
-    / while / 'break'
+    / if / while / 'break'
     / term
 
 exp = ( ';'* stmt )* ';'*

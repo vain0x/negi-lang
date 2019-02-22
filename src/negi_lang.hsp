@@ -109,7 +109,7 @@
 // 識別子
 #enum exp_ident
 
-// if 式
+// if 文
 // exp_cond: 条件
 // exp_l, exp_r: then, else
 #enum exp_if
@@ -597,7 +597,7 @@
 
 // トークンが文の始まりを表すか否か。
 #define ctype tok_leads_stmt(%1) \
-	(tok_leads_term(%1)  || (%1) == tok_let || (%1) == tok_while || (%1) == tok_break)
+	(tok_leads_term(%1) || (%1) == tok_let || (%1) == tok_if || (%1) == tok_while || (%1) == tok_break)
 
 // -----------------------------------------------
 // 式リスト
@@ -646,7 +646,6 @@
 	g_exp_exp_rs(g_exp_count - 1) = exp_r
 	return g_exp_count - 1
 
-// if 式を追加する。
 #defcfunc negi_lang_exp_add_if int cond_exp_i, int then_exp_i, int else_exp_i, int tok_i
 
 	negi_lang_exp_add exp_if, tok_i
@@ -1001,9 +1000,6 @@
 
 #defcfunc negi_lang_parse_term var tok_i
 
-	if g_tok_kinds(tok_i) == tok_if {
-		return negi_lang_parse_if(tok_i)
-	}
 	return negi_lang_parse_cond(tok_i)
 
 #defcfunc negi_lang_parse_let var tok_i, \
@@ -1034,6 +1030,9 @@
 
 	if g_tok_kinds(tok_i) == tok_let {
 		return negi_lang_parse_let(tok_i)
+	}
+	if g_tok_kinds(tok_i) == tok_if {
+		return negi_lang_parse_if(tok_i)
 	}
 	if g_tok_kinds(tok_i) == tok_while {
 		return negi_lang_parse_while(tok_i)
