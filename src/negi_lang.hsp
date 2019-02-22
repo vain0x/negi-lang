@@ -103,16 +103,16 @@
 #enum exp_str
 
 // 配列リテラル
-// int: 長さ
+// subexp: 要素
 #enum exp_array
 
 // 識別子
 #enum exp_ident
 
-// if 文
-// exp_cond: 条件
-// exp_l, exp_r: then, else
-#enum exp_if
+// 関数呼び出し
+// exp_l: 関数
+// subexp: 引数
+#enum exp_call
 
 // 演算式
 #enum exp_op
@@ -121,6 +121,11 @@
 // int: 定義される識別子のトークン番号
 // exp_r: 初期化式
 #enum exp_let
+
+// if 文
+// exp_cond: 条件
+// exp_l, exp_r: then, else
+#enum exp_if
 
 // exp_cond: 条件式
 // exp_l: 本体
@@ -202,6 +207,10 @@
 
 // スタック上の2つの要素を交換
 #enum cmd_swap
+
+// 関数呼び出し
+// x: 引数の個数
+#enum cmd_call
 
 // 演算
 #enum cmd_op
@@ -872,28 +881,50 @@
 
 	return negi_lang_exp_add_err("Expected an expression", tok_i)
 
-// 後置式 (x[i] のように後ろに演算子がつけたような式) をパースする。
+// 後置式をパースする。
+// ここでは `x[i]` のように式の後ろにつく種類の式を後置式を呼んでいる。
 #defcfunc negi_lang_parse_suffix var tok_i, \
-	local exp_l, local exp_r, local op_tok_i
+	local exp_l, local exp_r, local op_tok_i, \
+	local exp_is, local subexp_count
 
 	exp_l = negi_lang_parse_atom(tok_i)
 
 	repeat
-		if g_tok_kinds(tok_i) != tok_bracket_l {
-			break
+		if g_tok_kinds(tok_i) == tok_bracket_l {
+			op_tok_i = tok_i
+			tok_i++
+
+			exp_r = negi_lang_parse_term(tok_i)
+
+			if g_tok_kinds(tok_i) != tok_bracket_r {
+				exp_l = negi_lang_exp_add_err("角カッコが閉じられていません。", op_tok_i)
+				break
+			}
+			tok_i++
+
+			exp_l = negi_lang_exp_add_bin(op_ix, exp_l, exp_r, op_tok_i)
+			continue
 		}
-		op_tok_i = tok_i
-		tok_i++
 
-		exp_r = negi_lang_parse_term(tok_i)
+		if g_tok_kinds(tok_i) == tok_paren_l {
+			op_tok_i = tok_i
+			tok_i++
 
-		if g_tok_kinds(tok_i) != tok_bracket_r {
-			exp_l = negi_lang_exp_add_err("角カッコが閉じられていません。", op_tok_i)
-			break
+			negi_lang_parse_list tok_i, op_tok_i, exp_is, subexp_count
+
+			if g_tok_kinds(tok_i) != tok_paren_r {
+				exp_l = negi_lang_exp_add_err("丸カッコが閉じられていません。", op_tok_i)
+				break
+			}
+			tok_i++
+
+			exp_r = exp_l
+			exp_l = negi_lang_exp_add_subexps(exp_call, exp_is, subexp_count, op_tok_i)
+			g_exp_exp_ls(exp_l) = exp_r
+			continue
 		}
-		tok_i++
 
-		exp_l = negi_lang_exp_add_bin(op_ix, exp_l, exp_r, op_tok_i)
+		break
 	loop
 
 	return exp_l
@@ -1285,6 +1316,22 @@
 	loop
 	return
 
+#deffunc negi_lang_gen_exp_call int exp_i, \
+	local subexp_l, local subexp_r, local len, local tok_i
+
+	assert g_exp_kinds(exp_i) == exp_call
+	subexp_l = g_exp_subexp_ls(exp_i)
+	subexp_r = g_exp_subexp_rs(exp_i)
+	len = subexp_r - subexp_l
+	tok_i = g_exp_tok_is(exp_i)
+
+	negi_lang_gen_exp g_exp_exp_ls(exp_i)
+	repeat len
+		negi_lang_gen_exp g_subexp_exp_is(subexp_l + cnt)
+	loop
+	negi_lang_cmd_add_int cmd_call, len, tok_i
+	return
+
 #deffunc negi_lang_gen_exp_if int exp_i, \
 	local cond_exp_i, local then_exp_i, local else_exp_i, \
 	local else_label_i, local end_label_i, local tok_i
@@ -1484,6 +1531,10 @@
 	}
 	if g_exp_kinds(exp_i) == exp_break {
 		negi_lang_gen_exp_break exp_i
+		return
+	}
+	if g_exp_kinds(exp_i) == exp_call {
+		negi_lang_gen_exp_call exp_i
 		return
 	}
 	if g_exp_kinds(exp_i) == exp_op {
@@ -1742,6 +1793,23 @@
 	negi_lang_stack_push ty_r, val_r
 	return
 
+#deffunc negi_lang_eval_call int cmd_i, \
+	local len, local i, local fn_ty, local fn_val, local arg_tys, local arg_vals
+
+	assert g_cmd_kinds(cmd_i) == cmd_call
+	len = g_cmd_xs(cmd_i)
+
+	dim arg_tys, len
+	dim arg_vals, len
+	repeat len
+		i = len - 1 - cnt
+		negi_lang_stack_pop arg_tys(i), arg_vals(i)
+	loop
+	negi_lang_stack_pop fn_ty, fn_val
+
+	negi_lang_eval_abort "type error", g_cmd_tok_is(cmd_i)
+	return
+
 // スタック上の2つの値に演算を適用し、結果をスタックに置く。
 #deffunc negi_lang_eval_op int cmd_i, int op, \
 	local ty, local val_l, local ty_r, local val_r, local ty_t, local val_t
@@ -1910,6 +1978,10 @@
 		}
 		if g_cmd_kinds(cmd_i) == cmd_swap {
 			negi_lang_eval_swap cmd_i
+			continue
+		}
+		if g_cmd_kinds(cmd_i) == cmd_call {
+			negi_lang_eval_call cmd_i
 			continue
 		}
 		if g_cmd_kinds(cmd_i) == cmd_op {
