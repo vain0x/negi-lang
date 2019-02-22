@@ -271,10 +271,17 @@
 	dim g_exp_exp_conds
 	dim g_exp_exp_ls
 	dim g_exp_exp_rs
+	dim g_exp_subexp_ls
+	dim g_exp_subexp_rs
 	dim g_exp_ints
 	sdim g_exp_strs
 	dim g_exp_tok_is
 	g_exp_count = 0
+
+	// 部分式のリスト
+	// exp_l, exp_r: 式の範囲
+	dim g_subexp_exp_is
+	g_subexp_count = 0
 
 	// プログラム全体からなる式の式番号
 	g_exp_i_root = exp_i_none
@@ -598,6 +605,8 @@
 	g_exp_exp_ls(g_exp_count) = exp_i_none
 	g_exp_exp_rs(g_exp_count) = exp_i_none
 	g_exp_exp_conds(g_exp_count) = exp_i_none
+	g_exp_subexp_ls(g_exp_count) = 0
+	g_exp_subexp_rs(g_exp_count) = 0
 	g_exp_ints(g_exp_count) = 0
 	g_exp_strs(g_exp_count) = ""
 	g_exp_tok_is(g_exp_count) = tok_i
@@ -635,6 +644,16 @@
 	g_exp_exp_rs(g_exp_count - 1) = exp_r
 	return g_exp_count - 1
 
+#defcfunc negi_lang_exp_add_subexps int kind, array exp_is, int subexp_count, int tok_i, \
+	local subexp_l, local subexp_r
+
+	negi_lang_subexp_add exp_is, subexp_count, subexp_l, subexp_r
+
+	negi_lang_exp_add kind, tok_i
+	g_exp_subexp_ls(g_exp_count - 1) = subexp_l
+	g_exp_subexp_rs(g_exp_count - 1) = subexp_r
+	return g_exp_count - 1
+
 #defcfunc negi_lang_exp_add_if int cond_exp_i, int then_exp_i, int else_exp_i, int tok_i
 
 	negi_lang_exp_add exp_if, tok_i
@@ -657,6 +676,23 @@
 	g_exp_exp_conds(g_exp_count - 1) = cond_exp_i
 	g_exp_exp_ls(g_exp_count - 1) = body_exp_i
 	return g_exp_count - 1
+
+// -----------------------------------------------
+// 部分式リスト
+// -----------------------------------------------
+
+#deffunc negi_lang_subexp_add array exp_is, int len, var out_subexp_l, var out_subexp_r, \
+	local i
+
+	out_subexp_l = g_subexp_count
+	out_subexp_r = g_subexp_count + len
+	g_subexp_count += len
+
+	repeat len
+		i = len - 1 - cnt
+		g_subexp_exp_is(out_subexp_l + i) = exp_is(i)
+	loop
+	return
 
 // -----------------------------------------------
 // 構文解析
@@ -682,23 +718,20 @@
 	tok_i++
 	return exp_i
 
-// カンマで区切られた term の並びを配列リテラルとしてパースする。
-#defcfunc negi_lang_parse_list var tok_i, int bracket_tok_i, \
-	local create_exp_i, local exp_l, local exp_r, local len, \
-	local kind, local elem_tok_i
+// カンマで区切られた term の並びをパースする。
+#deffunc negi_lang_parse_list var tok_i, int bracket_tok_i, array out_exp_is, var out_subexp_count, \
+	local exp_i, local len, local kind, local item_tok_i
 
-	create_exp_i = negi_lang_exp_add_int(exp_array, 0, bracket_tok_i)
-	exp_l = create_exp_i
-
+	len = 0
 	repeat
-		elem_tok_i = tok_i
+		item_tok_i = tok_i
 		kind = g_tok_kinds(tok_i)
 		if tok_leads_term(kind) == false {
 			break
 		}
 
-		exp_r = negi_lang_parse_term(tok_i)
-		exp_l = negi_lang_exp_add_bin(op_array_push, exp_l, exp_r, elem_tok_i)
+		exp_i = negi_lang_parse_term(tok_i)
+		out_exp_is(len) = exp_i
 		len++
 
 		if g_tok_kinds(tok_i) != tok_comma {
@@ -707,8 +740,23 @@
 		tok_i++
 	loop
 
-	g_exp_ints(create_exp_i) = len
-	return exp_l
+	out_subexp_count = len
+	return
+
+#defcfunc negi_lang_parse_array var tok_i, \
+	local exp_is, local subexp_count, local bracket_tok_i, local exp_i
+
+	bracket_tok_i = tok_i
+	tok_i++
+
+	negi_lang_parse_list tok_i, bracket_tok_i, exp_is, subexp_count
+	exp_i = negi_lang_exp_add_subexps(exp_array, exp_is, subexp_count, bracket_tok_i)
+
+	if g_tok_kinds(tok_i) != tok_bracket_r {
+		return negi_lang_exp_add_err("角カッコが閉じられていません。", bracket_tok_i)
+	}
+	tok_i++
+	return exp_i
 
 #defcfunc negi_lang_parse_block var tok_i, \
 	local brace_tok_i, local exp_i
@@ -816,16 +864,7 @@
 		return exp_i
 	}
 	if g_tok_kinds(tok_i) == tok_bracket_l {
-		op_tok_i = tok_i
-		tok_i++
-
-		exp_i = negi_lang_parse_list(tok_i, op_tok_i)
-
-		if g_tok_kinds(tok_i) != tok_bracket_r {
-			return negi_lang_exp_add_err("角カッコが閉じられていません。", op_tok_i)
-		}
-		tok_i++
-		return exp_i
+		return negi_lang_parse_array(tok_i)
 	}
 
 	// 項のパースができなかったので、次のトークンが項の始まりを表すものではないことが分かる。
@@ -1230,6 +1269,22 @@
 	negi_lang_cmd_add_int cmd_var, var_i, g_exp_tok_is(exp_i)
 	return
 
+#deffunc negi_lang_gen_exp_array int exp_i, \
+	local subexp_l, local subexp_r, local exp_l, local exp_r, local len, local tok_i
+
+	assert g_exp_kinds(exp_i) == exp_array
+	subexp_l = g_exp_subexp_ls(exp_i)
+	subexp_r = g_exp_subexp_rs(exp_i)
+	len = subexp_r - subexp_l
+	tok_i = g_exp_tok_is(exp_i)
+
+	negi_lang_cmd_add_int cmd_push_array, len, tok_i
+	repeat len
+		negi_lang_gen_exp g_subexp_exp_is(subexp_l + cnt)
+		negi_lang_cmd_add_int cmd_op, op_array_push, tok_i
+	loop
+	return
+
 #deffunc negi_lang_gen_exp_if int exp_i, \
 	local cond_exp_i, local then_exp_i, local else_exp_i, \
 	local else_label_i, local end_label_i, local tok_i
@@ -1412,7 +1467,7 @@
 		return
 	}
 	if g_exp_kinds(exp_i) == exp_array {
-		negi_lang_cmd_add_int cmd_push_array, g_exp_ints(exp_i), g_exp_tok_is(exp_i)
+		negi_lang_gen_exp_array exp_i
 		return
 	}
 	if g_exp_kinds(exp_i) == exp_ident {
