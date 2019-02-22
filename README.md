@@ -76,13 +76,13 @@ Git のコミットメッセージには以下のプレフィックスをつけ�
 ### 開発: 構文メモ
 
 - 任意の構文要素を式と呼ぶことにする。
-- 丸カッコの中にかける種類の式を term と呼ぶことにする。
-    - `x + y` や `p ? x : y` は term である。
-    - `let x = y` は term でない。
-- 単一のトークンや一対のカッコからなる種類の term を atom と呼ぶことにする。
+- 単一のトークンや一対のカッコからなる種類の式を atom と呼ぶことにする。
     - `42` や `(x + y)` は atom である。
     - `x + y` は atom でない。
-- 丸カッコの中にかけない種類の式を stmt と呼ぶことにする。
+- 丸カッコの中に書ける種類の式を term と呼ぶことにする。
+    - `x + y` や `p ? x : y` は term である。
+    - `let x = y` は term でない。
+- 丸カッコの中に書けない種類の式を stmt と呼ぶことにする。
     - `let x = y` は stmt である。
 
 ```
@@ -92,12 +92,6 @@ int = ( '+' / '-' ) [0-9]+
 str = ".."
 
 ident = [a-zA-Z_] [a-zA-Z0-9_]*
-
-block = '{' exp '}'
-
-if = 'if' '(' term ')' block ( 'else' ( if / block ) )?
-
-while = 'while' '(' term ')' block
 
 atom
     = '(' term ')'
@@ -120,7 +114,13 @@ term = cond
 
 list = ( term ( ',' term )* )?
 
+block = '{' exp '}'
+
 let = 'let' ident '=' term
+
+if = 'if' '(' term ')' block ( 'else' ( if / block ) )?
+
+while = 'while' '(' term ')' block
 
 stmt =
     let
