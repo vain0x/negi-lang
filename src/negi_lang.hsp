@@ -199,6 +199,9 @@
 // x: キャパシティ
 #enum cmd_push_array
 
+// 関数値をプッシュする
+#enum cmd_push_fun
+
 // 変数の値を読み取る
 #enum cmd_var
 
@@ -233,6 +236,9 @@
 
 // 配列。値は g_arrays の要素番号。
 #enum ty_array
+
+// 関数。値は g_funs の要素番号。
+#enum ty_fun
 
 // ###############################################
 // 変数
@@ -310,6 +316,10 @@
 	// name: 変数名
 	sdim g_var_names
 	g_var_count = 0
+
+	// 組み込み関数のリスト
+	sdim g_fun_names
+	g_fun_count = 0
 
 	// 命令列
 	// kind: 命令の種類
@@ -1286,18 +1296,24 @@
 // -----------------------------------------------
 
 #deffunc negi_lang_gen_exp_ident int exp_i, \
-	local name, local var_i
+	local name, local tok_i, local var_i
 
 	assert g_exp_kinds(exp_i) == exp_ident
 	name = g_exp_strs(exp_i)
+	tok_i = g_exp_tok_is(exp_i)
 
 	negi_lang_var_find name, var_i
-	if var_i < 0 {
-		negi_lang_cmd_add_err "未定義の変数を使用しています。", g_exp_tok_is(exp_i)
+	if var_i >= 0 {
+		negi_lang_cmd_add_int cmd_var, var_i, tok_i
 		return
 	}
 
-	negi_lang_cmd_add_int cmd_var, var_i, g_exp_tok_is(exp_i)
+	if name == "array_len" {
+		negi_lang_cmd_add_int cmd_push_fun, 0, tok_i
+		return
+	}
+
+	negi_lang_cmd_add_err "未定義の変数を使用しています。", g_exp_tok_is(exp_i)
 	return
 
 #deffunc negi_lang_gen_exp_array int exp_i, \
@@ -1794,10 +1810,12 @@
 	return
 
 #deffunc negi_lang_eval_call int cmd_i, \
-	local len, local i, local fn_ty, local fn_val, local arg_tys, local arg_vals
+	local len, local call_tok_i, local i, \
+	local fun_ty, local fun_val, local arg_tys, local arg_vals
 
 	assert g_cmd_kinds(cmd_i) == cmd_call
 	len = g_cmd_xs(cmd_i)
+	call_tok_i = g_cmd_tok_is(cmd_i)
 
 	dim arg_tys, len
 	dim arg_vals, len
@@ -1805,9 +1823,23 @@
 		i = len - 1 - cnt
 		negi_lang_stack_pop arg_tys(i), arg_vals(i)
 	loop
-	negi_lang_stack_pop fn_ty, fn_val
+	negi_lang_stack_pop fun_ty, fun_val
 
-	negi_lang_eval_abort "type error", g_cmd_tok_is(cmd_i)
+	if fun_ty != ty_fun {
+		negi_lang_eval_abort "type error", call_tok_i
+		return
+	}
+
+	// fun_i_array_len
+	if len != 1 {
+		negi_lang_eval_abort "array_len の引数は1個でなければいけません。", call_tok_i
+		return
+	}
+	if arg_tys(0) != ty_array {
+		negi_lang_eval_abort "array_len の第1引数は配列でなければいけません。", call_tok_i
+		return
+	}
+	negi_lang_stack_push ty_int, g_array_lens(arg_vals(0))
 	return
 
 // スタック上の2つの値に演算を適用し、結果をスタックに置く。
@@ -1962,6 +1994,10 @@
 		}
 		if g_cmd_kinds(cmd_i) == cmd_push_array {
 			negi_lang_eval_push_array cmd_i
+			continue
+		}
+		if g_cmd_kinds(cmd_i) == cmd_push_fun {
+			negi_lang_stack_push ty_fun, 0
 			continue
 		}
 		if g_cmd_kinds(cmd_i) == cmd_var {
