@@ -431,7 +431,7 @@
 #define ctype is_op_char(%1) \
 	((%1) == '+' || (%1) == '-' || (%1) == '*' || (%1) == '/' || (%1) == '%%' \
 	|| (%1) == '&' || (%1) == '|' || (%1) == '^' || (%1) == '~' || (%1) == '!' \
-	|| (%1) == '=' || (%1) == '<' || (%1) == '>' || (%1) == '.' \
+	|| (%1) == '=' || (%1) == '<' || (%1) == '>' || (%1) == '.' || (%1) == '?' || (%1) == ':' \
 	)
 
 // -----------------------------------------------
@@ -976,12 +976,35 @@
 	}
 	return exp_l
 
+// 条件演算子の式をパースする
+#defcfunc negi_lang_parse_cond var tok_i, \
+	local cond_exp_i, local then_exp_i, local else_exp_i, local question_tok_i
+
+	cond_exp_i = negi_lang_parse_set(tok_i)
+
+	if (g_tok_kinds(tok_i) == tok_op && negi_lang_tok_text(tok_i) == "?") == false {
+		return cond_exp_i
+	}
+	question_tok_i = tok_i
+	tok_i++
+
+	then_exp_i = negi_lang_parse_term(tok_i)
+
+	if (g_tok_kinds(tok_i) == tok_op && negi_lang_tok_text(tok_i) == ":") == false {
+		return negi_lang_exp_add_err("コロンが必要です。", question_tok_i)
+	}
+	tok_i++
+
+	else_exp_i = negi_lang_parse_term(tok_i)
+
+	return negi_lang_exp_add_if(cond_exp_i, then_exp_i, else_exp_i, question_tok_i)
+
 #defcfunc negi_lang_parse_term var tok_i
 
 	if g_tok_kinds(tok_i) == tok_if {
 		return negi_lang_parse_if(tok_i)
 	}
-	return negi_lang_parse_set(tok_i)
+	return negi_lang_parse_cond(tok_i)
 
 #defcfunc negi_lang_parse_let var tok_i, \
 	local let_tok_i, local ident_tok_i, local init_exp_i
