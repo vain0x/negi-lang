@@ -90,6 +90,10 @@
 
 #enum tok_break
 
+#enum tok_fun
+
+#enum tok_return
+
 // -----------------------------------------------
 // 式の種類
 // -----------------------------------------------
@@ -132,6 +136,13 @@
 #enum exp_while
 
 #enum exp_break
+
+// ラムダ式
+// subexp: 仮引数リスト
+// exp_l: 本体
+#enum exp_fun
+
+#enum exp_return
 
 // -----------------------------------------------
 // 無効な式番号
@@ -202,6 +213,10 @@
 // 関数値をプッシュする
 #enum cmd_push_fun
 
+// ラムダ式をプッシュする
+// x: 関数番号
+#enum cmd_make_fun
+
 // 変数の値を読み取る
 #enum cmd_var
 
@@ -214,6 +229,9 @@
 // 関数呼び出し
 // x: 引数の個数
 #enum cmd_call
+
+// 関数から戻る
+#enum cmd_return
 
 // 演算
 #enum cmd_op
@@ -239,6 +257,13 @@
 
 // 関数。値は g_funs の要素番号。
 #enum ty_fun
+
+// -----------------------------------------------
+// 関数の種類
+// -----------------------------------------------
+
+#enum fun_kind_primitive
+#enum fun_kind_lambda
 
 // ###############################################
 // 変数
@@ -317,9 +342,14 @@
 	sdim g_var_names
 	g_var_count = 0
 
-	// 組み込み関数のリスト
+	// 関数のリスト
+	// kind: 関数の種類
+	// name: 関数の名前
+	// label_i: 関数本体のラベル番号 (ラムダのみ)
+	dim g_fun_kinds
 	sdim g_fun_names
-	g_fun_count = 0
+	dim g_fun_label_is
+	g_fun_count = 1
 
 	// 命令列
 	// kind: 命令の種類
@@ -343,6 +373,10 @@
 	g_data_stack_ptr = 0
 	g_data_stack_ptr_max = g_data_count / 4
 	g_data_heap_ptr = g_data_stack_ptr_max
+
+	// コールスタック
+	dim g_call_stack_cmd_is
+	g_call_satck_count = 0
 
 	// 評価中に生成された文字列のリスト
 	sdim g_strs, 16, 1024
@@ -472,11 +506,13 @@
 
 #defcfunc negi_lang_tok_detect_kind str text
 
+	if text == "let" { return tok_let }
 	if text == "if" { return tok_if }
 	if text == "else" { return tok_else }
 	if text == "while" { return tok_while }
 	if text == "break" { return tok_break }
-	if text == "let" { return tok_let }
+	if text == "fun" { return tok_fun }
+	if text == "return" { return tok_return }
 	return tok_ident
 
 // -----------------------------------------------
@@ -607,12 +643,14 @@
 // トークンが項の始まりを表すか否か。
 #define ctype tok_leads_term(%1) \
 	((%1) == tok_int || (%1) == tok_str || (%1) == tok_ident \
-	|| (%1) == tok_paren_l || (%1) == tok_bracket_l || (%1) == tok_if \
+	|| (%1) == tok_paren_l || (%1) == tok_bracket_l || (%1) == tok_fun \
 	)
 
 // トークンが文の始まりを表すか否か。
 #define ctype tok_leads_stmt(%1) \
-	(tok_leads_term(%1) || (%1) == tok_let || (%1) == tok_if || (%1) == tok_while || (%1) == tok_break)
+	(tok_leads_term(%1) || (%1) == tok_let || (%1) == tok_if \
+	|| (%1) == tok_while || (%1) == tok_break || (%1) == tok_return \
+	)
 
 // -----------------------------------------------
 // 式リスト
@@ -854,6 +892,54 @@
 
 	return negi_lang_exp_add_int(exp_break, 0, break_tok_i)
 
+#defcfunc negi_lang_parse_fun var tok_i, \
+	local fun_tok_i, local paren_tok_i, local exp_is, local subexp_count, \
+	local body_exp_i, local fun_exp_i
+
+	assert g_tok_kinds(tok_i) == tok_fun
+	fun_tok_i = tok_i
+	tok_i++
+
+	if g_tok_kinds(tok_i) != tok_paren_l {
+		return negi_lang_exp_add_err("仮引数リストが必要です。", tok_i)
+	}
+	paren_tok_i = tok_i
+	tok_i++
+
+	negi_lang_parse_list tok_i, paren_tok_i, exp_is, subexp_count
+
+	if g_tok_kinds(tok_i) != tok_paren_r {
+		return negi_lang_exp_add_err("丸カッコが閉じられていません。", paren_tok_i)
+	}
+	tok_i++
+
+	if g_tok_kinds(tok_i) != tok_brace_l {
+		return negi_lang_exp_add_err("波カッコが必要です。", tok_i)
+	}
+	body_exp_i = negi_lang_parse_block(tok_i)
+
+	fun_exp_i = negi_lang_exp_add_subexps(exp_fun, exp_is, subexp_count, fun_tok_i)
+	g_exp_exp_ls(fun_exp_i) = body_exp_i
+
+	return fun_exp_i
+
+#defcfunc negi_lang_parse_return var tok_i, \
+	local return_tok_i, local exp_i, local exp_l
+
+	assert g_tok_kinds(tok_i) == tok_return
+	return_tok_i = tok_i
+	tok_i++
+
+	if tok_leads_term(tok_i) {
+		exp_l = negi_lang_parse_term(tok_i)
+	} else {
+		exp_l = negi_lang_exp_add_int(exp_int, 0, return_tok_i)
+	}
+
+	exp_i = negi_lang_exp_add_int(exp_return, 0, return_tok_i)
+	g_exp_exp_ls(exp_i) = exp_l
+	return exp_i
+
 #defcfunc negi_lang_parse_atom var tok_i, \
 	local value, local exp_i, local op_tok_i
 
@@ -1069,6 +1155,11 @@
 
 #defcfunc negi_lang_parse_term var tok_i
 
+	assert tok_leads_term(g_tok_kinds(tok_i))
+
+	if g_tok_kinds(tok_i) == tok_fun {
+		return negi_lang_parse_fun(tok_i)
+	}
 	return negi_lang_parse_cond(tok_i)
 
 #defcfunc negi_lang_parse_let var tok_i, \
@@ -1108,6 +1199,9 @@
 	}
 	if g_tok_kinds(tok_i) == tok_break {
 		return negi_lang_parse_break(tok_i)
+	}
+	if g_tok_kinds(tok_i) == tok_return {
+		return negi_lang_parse_return(tok_i)
 	}
 	return negi_lang_parse_term(tok_i)
 
@@ -1204,6 +1298,18 @@
 
 	g_label_cmd_is(label_i) = cmd_i
 	return
+
+// -----------------------------------------------
+// 関数リスト
+// -----------------------------------------------
+
+#defcfunc negi_lang_fun_add_lambda int body_label_i
+
+	g_fun_kinds(g_fun_count) = fun_kind_lambda
+	g_fun_names(g_fun_count) = "<anonymous: " + body_label_i + ">"
+	g_fun_label_is(g_fun_count) = body_label_i
+	g_fun_count++
+	return g_fun_count - 1
 
 // -----------------------------------------------
 // ループスタック
@@ -1518,6 +1624,52 @@
 	negi_lang_cmd_add_int cmd_set, var_i, g_exp_tok_is(exp_i)
 	return
 
+#deffunc negi_lang_gen_exp_fun int exp_i, \
+	local subexp_l, local subexp_r, local len, local body_exp_i, local tok_i, \
+	local body_label_i, local return_label_i, local next_label_i, local fun_i
+
+	assert g_exp_kinds(exp_i) == exp_fun
+	body_exp_i = g_exp_exp_ls(exp_i)
+	subexp_l = g_exp_subexp_ls(exp_i)
+	subexp_r = g_exp_subexp_rs(exp_i)
+	tok_i = g_exp_tok_is(exp_i)
+
+	// FIXME: 仮引数リストを解析する
+
+	body_label_i = negi_lang_label_add()
+	next_label_i = negi_lang_label_add()
+
+	// 関数本体が実行されないようにスキップする。
+	negi_lang_cmd_add_goto next_label_i, tok_i
+
+	// 関数本体を解析する。
+	// FIXME: break が関数の外側のループに飛ばないようにする。
+
+	// *l_begin : do `body` : return 0
+	negi_lang_cmd_add_int cmd_label, body_label_i, tok_i
+	negi_lang_gen_exp body_exp_i
+	negi_lang_cmd_add_int cmd_push_int, 0, tok_i
+	negi_lang_cmd_add cmd_return, tok_i
+
+	fun_i = negi_lang_fun_add_lambda(body_label_i)
+
+	// 関数を生成する。
+	negi_lang_cmd_add_int cmd_label, next_label_i, tok_i
+	negi_lang_cmd_add_int cmd_make_fun, fun_i, tok_i
+
+	return
+
+#deffunc negi_lang_gen_exp_return int exp_i, \
+	local exp_l, local tok_i
+
+	assert g_exp_kinds(exp_i) == exp_return
+	exp_l = g_exp_exp_ls(exp_i)
+	tok_i = g_exp_tok_is(exp_i)
+
+	negi_lang_gen_exp exp_l
+	negi_lang_cmd_add cmd_return, tok_i
+	return
+
 // 式を計算するコードを生成する。
 #deffunc negi_lang_gen_exp int exp_i
 
@@ -1537,6 +1689,18 @@
 		negi_lang_gen_exp_ident exp_i
 		return
 	}
+	if g_exp_kinds(exp_i) == exp_call {
+		negi_lang_gen_exp_call exp_i
+		return
+	}
+	if g_exp_kinds(exp_i) == exp_op {
+		negi_lang_gen_exp_op exp_i
+		return
+	}
+	if g_exp_kinds(exp_i) == exp_let {
+		negi_lang_gen_exp_let exp_i
+		return
+	}
 	if g_exp_kinds(exp_i) == exp_if {
 		negi_lang_gen_exp_if exp_i
 		return
@@ -1549,16 +1713,12 @@
 		negi_lang_gen_exp_break exp_i
 		return
 	}
-	if g_exp_kinds(exp_i) == exp_call {
-		negi_lang_gen_exp_call exp_i
+	if g_exp_kinds(exp_i) == exp_fun {
+		negi_lang_gen_exp_fun exp_i
 		return
 	}
-	if g_exp_kinds(exp_i) == exp_op {
-		negi_lang_gen_exp_op exp_i
-		return
-	}
-	if g_exp_kinds(exp_i) == exp_let {
-		negi_lang_gen_exp_let exp_i
+	if g_exp_kinds(exp_i) == exp_return {
+		negi_lang_gen_exp_return exp_i
 		return
 	}
 	if g_exp_kinds(exp_i) == exp_err {
@@ -1655,6 +1815,22 @@
 	g_data_tys(g_data_stack_ptr_max + var_i) = ty
 	g_data_vals(g_data_stack_ptr_max + var_i) = val
 	return
+
+// -----------------------------------------------
+// コールスタック
+// -----------------------------------------------
+
+#deffunc negi_lang_call_stack_push int cmd_i, int tok_i
+
+	g_call_stack_cmd_is(g_call_satck_count) = cmd_i
+	g_call_stack_count++
+	return
+
+#defcfunc negi_lang_call_stack_pop
+
+	assert g_call_stack_count >= 1
+	g_call_stack_count--
+	return g_call_stack_cmd_is(g_call_stack_count)
 
 // -----------------------------------------------
 // 文字列リスト
@@ -1811,7 +1987,8 @@
 
 #deffunc negi_lang_eval_call int cmd_i, \
 	local len, local call_tok_i, local i, \
-	local fun_ty, local fun_val, local arg_tys, local arg_vals
+	local fun_ty, local fun_val, local arg_tys, local arg_vals, \
+	local body_label_i
 
 	assert g_cmd_kinds(cmd_i) == cmd_call
 	len = g_cmd_xs(cmd_i)
@@ -1830,16 +2007,35 @@
 		return
 	}
 
+	// lambda
+	if g_fun_kinds(fun_val) == fun_kind_lambda {
+		body_label_i = g_fun_label_is(fun_val)
+
+		negi_lang_call_stack_push g_pc
+		g_pc = g_label_cmd_is(body_label_i)
+		return
+	}
+
 	// fun_i_array_len
-	if len != 1 {
-		negi_lang_eval_abort "array_len の引数は1個でなければいけません。", call_tok_i
+	if fun_val == 0 {
+		if len != 1 {
+			negi_lang_eval_abort "array_len の引数は1個でなければいけません。", call_tok_i
+			return
+		}
+		if arg_tys(0) != ty_array {
+			negi_lang_eval_abort "array_len の第1引数は配列でなければいけません。", call_tok_i
+			return
+		}
+		negi_lang_stack_push ty_int, g_array_lens(arg_vals(0))
 		return
 	}
-	if arg_tys(0) != ty_array {
-		negi_lang_eval_abort "array_len の第1引数は配列でなければいけません。", call_tok_i
-		return
-	}
-	negi_lang_stack_push ty_int, g_array_lens(arg_vals(0))
+	return
+
+#deffunc negi_lang_eval_return int cmd_i
+
+	assert
+	assert g_cmd_kinds(cmd_i) == cmd_return
+	g_pc = negi_lang_call_stack_pop()
 	return
 
 // スタック上の2つの値に演算を適用し、結果をスタックに置く。
@@ -2000,6 +2196,10 @@
 			negi_lang_stack_push ty_fun, 0
 			continue
 		}
+		if g_cmd_kinds(cmd_i) == cmd_make_fun {
+			negi_lang_stack_push ty_fun, g_cmd_xs(cmd_i)
+			continue
+		}
 		if g_cmd_kinds(cmd_i) == cmd_var {
 			negi_lang_eval_var cmd_i
 			continue
@@ -2018,6 +2218,10 @@
 		}
 		if g_cmd_kinds(cmd_i) == cmd_call {
 			negi_lang_eval_call cmd_i
+			continue
+		}
+		if g_cmd_kinds(cmd_i) == cmd_return {
+			negi_lang_eval_return cmd_i
 			continue
 		}
 		if g_cmd_kinds(cmd_i) == cmd_op {

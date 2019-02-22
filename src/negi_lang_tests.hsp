@@ -272,6 +272,11 @@
 	"}, 1
 	eval_test "組み込み関数を呼べる", "array_len([1, 2, 3])", "", 3
 
+	eval_test "ラムダ式を使える", {"
+		let one = fun () { return 1 };
+		one() == 1
+	"}, "", 1
+
 	test_end
 	return
 
