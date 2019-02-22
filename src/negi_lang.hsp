@@ -1319,6 +1319,12 @@
 	assert g_exp_kinds(exp_i) == exp_op
 	op = g_exp_ints(exp_i)
 
+	if op == op_semi {
+		negi_lang_gen_exp g_exp_exp_ls(exp_i)
+		negi_lang_cmd_add cmd_pop, g_exp_tok_is(exp_i)
+		negi_lang_gen_exp g_exp_exp_rs(exp_i)
+		return
+	}
 	if op == op_set {
 		negi_lang_gen_exp_set exp_i
 		return
@@ -1688,11 +1694,7 @@
 	negi_lang_stack_pop ty_r, val_r
 	negi_lang_stack_pop ty, val_l
 
-	if op == op_semi {
-		// x ; y ===> y
-		negi_lang_stack_push ty_r, val_r
-		return
-	}
+	assert op != op_semi
 
 	if op == op_eq {
 		if ty != ty_r {
