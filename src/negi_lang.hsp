@@ -184,15 +184,6 @@
 // スタック上の値が false ならジャンプ
 #enum cmd_jump_unless
 
-// ループを開始する
-// x: break 時のラベル
-#enum cmd_loop_begin
-
-// ループが終わるときに呼ばれる
-#enum cmd_loop_end
-
-#enum cmd_loop_break
-
 // 整数リテラルをスタックにプッシュ
 #enum cmd_push_int
 
@@ -293,6 +284,12 @@
 	dim g_label_cmd_is
 	g_label_count = 0
 
+	// ループスタック
+	// break/continue のジャンプ先を決定するために使う。
+	// break: break のジャンプ先のラベル番号
+	dim g_loop_breaks
+	dim g_loop_count
+
 	// グローバル変数のリスト
 	// name: 変数名
 	sdim g_var_names
@@ -332,14 +329,6 @@
 	dim g_array_dls, 1024
 	dim g_array_drs, 1024
 	g_array_count = 0
-
-	// ループスタック
-	// break/continue のジャンプ先およびスタック位置を決定するために使う。
-	// stack_ptr: ループ開始時のスタック位置
-	// break: break のジャンプ先のラベル番号
-	dim g_loop_stack_ptrs
-	dim g_loop_breaks
-	dim g_loop_count
 
 	// プログラムカウンタ (実行中のインストラクション番号)
 	g_pc = 0
@@ -1137,6 +1126,22 @@
 	return
 
 // -----------------------------------------------
+// ループスタック
+// -----------------------------------------------
+
+#deffunc negi_lang_loop_push int break_label_i
+
+	g_loop_breaks(g_loop_count) = break_label_i
+	g_loop_count++
+	return
+
+#deffunc negi_lang_loop_pop
+
+	assert g_loop_count >= 1
+	g_loop_count--
+	return
+
+// -----------------------------------------------
 // 変数リスト
 // -----------------------------------------------
 
@@ -1200,6 +1205,12 @@
 	negi_lang_cmd_add_int cmd_op, op_eq, tok_i
 	return
 
+#deffunc negi_lang_cmd_add_goto int label_i, int tok_i
+
+	negi_lang_cmd_add_int cmd_push_int, false, tok_i
+	negi_lang_cmd_add_int cmd_jump_unless, label_i, tok_i
+	return
+
 // -----------------------------------------------
 // コード生成
 // -----------------------------------------------
@@ -1238,8 +1249,7 @@
 
 	// do `then` : goto *l_end
 	negi_lang_gen_exp then_exp_i
-	negi_lang_cmd_add_int cmd_push_int, false, tok_i
-	negi_lang_cmd_add_int cmd_jump_unless, end_label_i, tok_i
+	negi_lang_cmd_add_goto end_label_i, tok_i
 
 	// *l_else: do `else`
 	negi_lang_cmd_add_int cmd_label, else_label_i, tok_i
@@ -1249,7 +1259,7 @@
 	negi_lang_cmd_add_int cmd_label, end_label_i, tok_i
 	return
 
-// while 式のコードを生成する。
+// while 文のコードを生成する。
 // スタックに何らかの値をちょうど1つ積んだ状態で終了するように気をつける。
 #deffunc negi_lang_gen_exp_while int exp_i, \
 	local cond_exp_i, local body_exp_i, \
@@ -1265,7 +1275,7 @@
 	begin_label_i = negi_lang_label_add()
 	else_label_i = negi_lang_label_add()
 
-	negi_lang_cmd_add_int cmd_loop_begin, else_label_i, tok_i
+	negi_lang_loop_push else_label_i
 
 	// *l_begin : if cond == false : goto *l_else
 	negi_lang_cmd_add_int cmd_label, begin_label_i, tok_i
@@ -1277,19 +1287,28 @@
 	negi_lang_gen_exp body_exp_i
 	negi_lang_cmd_add cmd_pop, tok_i
 
-	negi_lang_cmd_add_int cmd_push_int, false, tok_i
-	negi_lang_cmd_add_int cmd_jump_unless, begin_label_i, tok_i
+	negi_lang_cmd_add_goto begin_label_i, tok_i
 
-	// *l_else : loop_end : do `else`
+	// *l_else : do `else`
 	negi_lang_cmd_add_int cmd_label, else_label_i, tok_i
-	negi_lang_cmd_add cmd_loop_end, tok_i
 	negi_lang_cmd_add_int cmd_push_int, 0, tok_i
+
+	negi_lang_loop_pop
 	return
 
-#deffunc negi_lang_gen_exp_break int exp_i
+#deffunc negi_lang_gen_exp_break int exp_i, \
+	local break_label_i, local tok_i
 
 	assert g_exp_kinds(exp_i) == exp_break
-	negi_lang_cmd_add cmd_loop_break, g_exp_tok_is(exp_i)
+	tok_i = g_exp_tok_is(exp_i)
+
+	if g_loop_count == 0 {
+		negi_lang_cmd_add_err "ループの外側では break を使用できません。", tok_i
+		return
+	}
+	break_label_i = g_loop_breaks(g_loop_count - 1)
+
+	negi_lang_cmd_add_goto break_label_i, tok_i
 	return
 
 // 2項演算を行うコードを生成する。
@@ -1652,32 +1671,6 @@
 	}
 	return
 
-#deffunc negi_lang_eval_loop_begin int cmd_i, \
- 	local break_label_i
-
-	assert g_cmd_kinds(cmd_i) == cmd_loop_begin
-	break_label_i = g_cmd_xs(cmd_i)
-
-	g_loop_stack_ptrs(g_loop_count) = g_data_stack_ptr
-	g_loop_breaks(g_loop_count) = break_label_i
-	g_loop_count++
-	return
-
-#deffunc negi_lang_eval_loop_end int cmd_i
-
-	assert g_cmd_kinds(cmd_i) == cmd_loop_end
-	assert g_loop_count >= 1
-	g_loop_count--
-	return
-
-#deffunc negi_lang_eval_loop_break int cmd_i
-
-	assert g_cmd_kinds(cmd_i) == cmd_loop_break
-
-	g_data_stack_ptr = g_loop_stack_ptrs(g_loop_count - 1)
-	g_pc = g_label_cmd_is(g_loop_breaks(g_loop_count - 1))
-	return
-
 // スワップ命令を処理する。スタックの上の2つの要素の順番を入れ替える。
 #deffunc negi_lang_eval_swap int cmd_i, \
 	local val_l, local val_r, local ty_l, local ty_r
@@ -1852,18 +1845,6 @@
 		}
 		if g_cmd_kinds(cmd_i) == cmd_jump_unless {
 			negi_lang_eval_jump_unless cmd_i
-			continue
-		}
-		if g_cmd_kinds(cmd_i) == cmd_loop_begin {
-			negi_lang_eval_loop_begin cmd_i
-			continue
-		}
-		if g_cmd_kinds(cmd_i) == cmd_loop_end {
-			negi_lang_eval_loop_end cmd_i
-			continue
-		}
-		if g_cmd_kinds(cmd_i) == cmd_loop_break {
-			negi_lang_eval_loop_break cmd_i
 			continue
 		}
 		if g_cmd_kinds(cmd_i) == cmd_pop {
