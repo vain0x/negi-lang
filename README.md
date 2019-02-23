@@ -111,7 +111,7 @@ bin_set = bin_cmp ( ( '=' / '+=' / '-=' / '*=' / '/=' / '%=' ) term )?
 
 cond = bin_set ( '?' term ':' term )?
 
-fun = 'fun' '(' ( ident ( ',' ident ) )? ')' ( block / term )
+fun = 'fun' '(' ( ident ( ',' ident )* )? ')' ( block / term )
 
 term = fun / cond
 
