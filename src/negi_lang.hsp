@@ -1807,14 +1807,23 @@
 	failwith "unknown expression kind"
 
 // コード生成を実行する。
-#deffunc negi_lang_gen
+#deffunc negi_lang_gen \
+	local main_label_i
 
 	assert g_exp_i_root != exp_i_none
 
+	// 先頭にラベルを置く。
+	main_label_i = negi_lang_label_add()
+	negi_lang_cmd_add_int cmd_label, main_label_i, 0
+
+	// コード生成。
 	negi_lang_gen_exp g_exp_i_root
 
 	// スタックにある値を終了コードとして終了する命令を末尾に追加する。
 	negi_lang_cmd_add cmd_exit, g_tok_count - 1
+
+	// トップレベルに対応する関数を登録する。
+	g_fun_i_main = negi_lang_fun_add_closure(main_label_i)
 
 	// ラベルを解決する。
 	repeat g_cmd_count
