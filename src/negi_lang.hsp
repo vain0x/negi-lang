@@ -1998,24 +1998,6 @@
 	negi_lang_array_set array_ty, array_val, index, elem_ty, elem_val
 	return
 
-// 配列の index 番目の要素を設定する。
-#deffunc negi_lang_array_set \
-	int array_ty, int array_val, int index, int elem_ty, int elem_val, \
-	local di
-
-	assert array_ty == ty_array
-	assert 0 <= array_val && array_val < g_array_count
-
-	if (0 <= index && index < g_array_lens(array_val)) == false {
-		negi_lang_eval_abort "配列の要素番号が不正です。", 0 // FIXME: 位置情報
-		return
-	}
-
-	di = g_array_cell_ls(array_val) + index
-	g_cell_tys(di) = elem_ty
-	g_cell_vals(di) = elem_val
-	return
-
 // 配列の index 番目の要素の参照セルを取得する。
 #defcfunc negi_lang_array_ref int array_ty, int array_val, int index
 
@@ -2037,6 +2019,16 @@
 	di = negi_lang_array_ref(ty, val, index)
 	out_ty = g_cell_tys(di)
 	out_val = g_cell_vals(di)
+	return
+
+// 配列の index 番目の要素を設定する。
+#deffunc negi_lang_array_set \
+	int array_ty, int array_val, int index, int elem_ty, int elem_val, \
+	local di
+
+	di = negi_lang_array_ref(array_ty, array_val, index)
+	g_cell_tys(di) = elem_ty
+	g_cell_vals(di) = elem_val
 	return
 
 // -----------------------------------------------
