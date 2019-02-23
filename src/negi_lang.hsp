@@ -342,9 +342,13 @@
 	g_label_count = 0
 
 	// スコープスタック
+	// parent: 親スコープのスコープ番号 (トップレベルなら 0)
 	// len: スコープに属する識別子の個数
+	dim g_scope_parents
 	dim g_scope_lens
+	dim g_scope_tok_is
 	g_scope_count = 1
+	g_scope_current = 0
 
 	// ローカル識別子リスト
 	// scope_is: 識別子が属するスコープ番号
@@ -1338,16 +1342,19 @@
 // スコープスタック
 // -----------------------------------------------
 
-#defcfunc negi_lang_scope_push int tok_i
+#deffunc negi_lang_scope_push int tok_i
 
+	g_scope_parents(g_scope_count) = g_scope_current
 	g_scope_lens(g_scope_count) = 0
+	g_scope_tok_is(g_scope_count) = tok_i
 	g_scope_count++
-	return g_scope_count - 1
+	g_scope_current = g_scope_count - 1
+	return
 
 #deffunc negi_lang_scope_pop
 
-	assert g_scope_count >= 1
-	g_scope_count--
+	assert g_scope_current >= 1
+	g_scope_current = g_scope_parents(g_scope_current)
 	return
 
 #deffunc negi_lang_local_add_var int scope_i, int index, str ident, int tok_i
@@ -1722,7 +1729,8 @@
 	// 関数の入り口
 	negi_lang_cmd_add_int cmd_label, body_label_i, tok_i
 
-	scope_i = negi_lang_scope_push(tok_i)
+	negi_lang_scope_push tok_i
+	scope_i = g_scope_current
 
 	// 仮引数リストを解析する
 	repeat subexp_r - subexp_l, subexp_l
