@@ -185,7 +185,7 @@
 #enum op_mul // * (multiplication)
 #enum op_div // / (division)
 #enum op_mod // % (modulo)
-#enum op_ix // [] (index)
+#enum op_index // [] (index)
 
 // 以下の演算子はコンパイラによって生成される。
 
@@ -1084,7 +1084,7 @@
 			}
 			tok_i++
 
-			exp_l = negi_lang_exp_add_bin(op_ix, exp_l, exp_r, op_tok_i)
+			exp_l = negi_lang_exp_add_bin(op_index, exp_l, exp_r, op_tok_i)
 			continue
 		}
 
@@ -1720,7 +1720,7 @@
 		negi_lang_cmd_add_negate g_exp_tok_is(exp_i)
 		return
 	}
-	if op == op_ix && lval {
+	if op == op_index && lval {
 		negi_lang_cmd_add_int cmd_op, op_index_ref, g_exp_tok_is(exp_i)
 		return
 	}
@@ -1858,7 +1858,7 @@
 		negi_lang_gen_exp_ident exp_i, lval
 		return
 	}
-	if g_exp_kinds(exp_i) == exp_op && g_exp_ints(exp_i) == op_ix {
+	if g_exp_kinds(exp_i) == exp_op && g_exp_ints(exp_i) == op_index {
 		negi_lang_gen_exp_op exp_i, lval
 		return
 	}
@@ -2418,7 +2418,7 @@
 	assert op != op_gt
 	assert op != op_ge
 
-	if op == op_ix {
+	if op == op_index {
 		if ty == ty_str && ty_r == ty_int {
 			// FIXME: オーバーフローエラーを検出する
 			negi_lang_stack_push ty_int, peek(g_strs(val_l), val_r)
