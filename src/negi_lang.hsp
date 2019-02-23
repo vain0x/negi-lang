@@ -271,7 +271,7 @@
 // クロージャ。値は g_closures の要素番号。
 #enum ty_closure
 
-// 参照セル。値は g_data の要素番号。
+// 参照セル。値は g_cells の要素番号。
 #enum ty_cell
 
 // -----------------------------------------------
@@ -398,17 +398,17 @@
 	dim g_cmd_tok_is
 	g_cmd_count = 0
 
-	// データが配置される領域
-	// ty, val: データの型タグと値
+	// セルリスト (オブジェクトを配置する領域。メモリ空間のようなもの。)
+	// ty, val: セルの型タグと値
 	// stack_ptr: いまのスタックの末尾
 	// stack_ptr_max: スタック全体の末尾 (= ヒープの先頭)
 	// heap_ptr: いまのヒープの末尾
-	g_data_count = 1024 * 1024 / 4 // 1MB
-	dim g_data_tys, g_data_count
-	dim g_data_vals, g_data_count
-	g_data_stack_ptr = 0
-	g_data_stack_ptr_max = g_data_count / 4
-	g_data_heap_ptr = g_data_stack_ptr_max
+	g_cell_count = 1024 * 1024 / 4 // 1MB
+	dim g_cell_tys, g_cell_count
+	dim g_cell_vals, g_cell_count
+	g_cell_i_stack_end = 0
+	g_cell_i_stack_max = g_cell_count / 4
+	g_cell_i_heap_end = g_cell_i_stack_max
 
 	// フレーム (関数呼び出しのメタ情報)
 	// cmd_i: return 直後に実行するコマンド番号
@@ -425,10 +425,10 @@
 
 	// 評価中に生成された配列のリスト
 	// len: 配列の現在の長さ
-	// dl, dr: この配列の要素が占めるデータ領域の範囲
+	// cell_l, cell_r: この配列の要素が占めるセルリストの範囲
 	dim g_array_lens, 1024
-	dim g_array_dls, 1024
-	dim g_array_drs, 1024
+	dim g_array_cell_ls, 1024
+	dim g_array_cell_rs, 1024
 	g_array_count = 0
 
 	// 評価中に生成された環境のリスト
@@ -1894,24 +1894,24 @@
 
 	logmes "push ty=" + ty + " val=" + val
 
-	if g_data_stack_ptr >= g_data_stack_ptr_max {
+	if g_cell_i_stack_end >= g_cell_i_stack_max {
 		// FIXME: エラー箇所を報告する
 		negi_lang_eval_abort "STACK OVERFLOW", 0
 		return
 	}
 
-	g_data_tys(g_data_stack_ptr) = ty
-	g_data_vals(g_data_stack_ptr) = val
-	g_data_stack_ptr++
+	g_cell_tys(g_cell_i_stack_end) = ty
+	g_cell_vals(g_cell_i_stack_end) = val
+	g_cell_i_stack_end++
 	return
 
 // スタックから値を取り出す。
 #deffunc negi_lang_stack_pop var out_ty, var out_val
 
-	assert g_data_stack_ptr >= 1
-	g_data_stack_ptr--
-	out_ty = g_data_tys(g_data_stack_ptr)
-	out_val = g_data_vals(g_data_stack_ptr)
+	assert g_cell_i_stack_end >= 1
+	g_cell_i_stack_end--
+	out_ty = g_cell_tys(g_cell_i_stack_end)
+	out_val = g_cell_vals(g_cell_i_stack_end)
 
 	logmes "pop ty=" + out_ty + " val=" + out_val
 	return
@@ -1920,17 +1920,17 @@
 // ヒープ
 // -----------------------------------------------
 
-#deffunc negi_lang_heap_alloc int count, var out_dl, var out_dr
+#deffunc negi_lang_heap_alloc int count, var out_cell_l, var out_cell_r
 
-	if g_data_heap_ptr + count > g_data_count {
+	if g_cell_i_heap_end + count > g_cell_count {
 		// FIXME: ヒープを自動で拡張する
 		negi_lang_eval_abort "OUT OF MEMORY", 0
 		return
 	}
 
-	out_dl = g_data_heap_ptr
-	out_dr = g_data_heap_ptr + count
-	g_data_heap_ptr += count
+	out_cell_l = g_cell_i_heap_end
+	out_cell_r = g_cell_i_heap_end + count
+	g_cell_i_heap_end += count
 	return
 
 // -----------------------------------------------
@@ -1969,15 +1969,15 @@
 // 配列リストに新しい配列を追加して、その番号を返す。
 // capacity: この配列の長さの最大値
 #defcfunc negi_lang_array_add int len, int capacity, \
-	local dl, local dr
+	local cell_l, local cell_r
 
 	assert 0 <= len && len <= capacity
 
-	negi_lang_heap_alloc capacity, dl, dr
+	negi_lang_heap_alloc capacity, cell_l, cell_r
 
 	g_array_lens(g_array_count) = len
-	g_array_dls(g_array_count) = dl
-	g_array_drs(g_array_count) = dr
+	g_array_cell_ls(g_array_count) = cell_l
+	g_array_cell_rs(g_array_count) = cell_r
 	g_array_count++
 	return g_array_count - 1
 
@@ -1989,7 +1989,7 @@
 	assert array_ty == ty_array
 	index = g_array_lens(array_val)
 
-	if index >= g_array_drs(array_val) - g_array_dls(array_val) {
+	if index >= g_array_cell_rs(array_val) - g_array_cell_ls(array_val) {
 		failwith "配列の要素数が限界を超えました。配列の拡張は未実装です。"
 		return
 	}
@@ -2011,9 +2011,9 @@
 		return
 	}
 
-	di = g_array_dls(array_val) + index
-	g_data_tys(di) = elem_ty
-	g_data_vals(di) = elem_val
+	di = g_array_cell_ls(array_val) + index
+	g_cell_tys(di) = elem_ty
+	g_cell_vals(di) = elem_val
 	return
 
 // 配列の index 番目の要素の参照セルを取得する。
@@ -2027,7 +2027,7 @@
 		return 0
 	}
 
-	return g_array_dls(array_val) + index
+	return g_array_cell_ls(array_val) + index
 
 // 配列の index 番目の要素を取得する。
 #deffunc negi_lang_array_get \
@@ -2035,8 +2035,8 @@
 	local di
 
 	di = negi_lang_array_ref(ty, val, index)
-	out_ty = g_data_tys(di)
-	out_val = g_data_vals(di)
+	out_ty = g_cell_tys(di)
+	out_val = g_cell_vals(di)
 	return
 
 // -----------------------------------------------
@@ -2149,7 +2149,7 @@
 		return
 	}
 
-	negi_lang_stack_push g_data_tys(cell_val), g_data_vals(cell_val)
+	negi_lang_stack_push g_cell_tys(cell_val), g_cell_vals(cell_val)
 	return
 
 #deffunc negi_lang_eval_cell_set int cmd_i, \
@@ -2164,8 +2164,8 @@
 		negi_lang_eval_abort "左辺値が必要です。", g_cmd_tok_is(cmd_i)
 		return
 	}
-	g_data_tys(cell_val) = item_ty
-	g_data_vals(cell_val) = item_val
+	g_cell_tys(cell_val) = item_ty
+	g_cell_vals(cell_val) = item_val
 
 	negi_lang_stack_push item_ty, item_val
 	return
