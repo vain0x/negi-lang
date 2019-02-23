@@ -1357,14 +1357,12 @@
 	g_scope_current = g_scope_parents(g_scope_current)
 	return
 
-#deffunc negi_lang_local_add_var int scope_i, int index, str ident, int tok_i
+#deffunc negi_lang_local_add_var str ident, int tok_i
 
-	assert 0 <= scope_i && scope_i < g_scope_count
+	g_scope_lens(g_scope_current)++
 
-	g_scope_lens(scope_i)++
-
-	g_local_scope_is(g_local_count) = scope_i
-	g_local_indexes(g_local_count) = index
+	g_local_scope_is(g_local_count) = g_scope_current
+	g_local_indexes(g_local_count) = g_scope_lens(g_scope_current) - 1
 	g_local_idents(g_local_count) = ident
 	g_local_tok_is(g_local_count) = tok_i
 	g_local_count++
@@ -1742,7 +1740,7 @@
 			continue
 		}
 
-		negi_lang_local_add_var scope_i, index, g_exp_strs(param_exp_i), g_exp_tok_is(param_exp_i)
+		negi_lang_local_add_var g_exp_strs(param_exp_i), g_exp_tok_is(param_exp_i)
 	loop
 
 	// 関数本体を解析する。
