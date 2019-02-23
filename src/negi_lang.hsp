@@ -158,6 +158,10 @@
 #enum op_semi // ; (semicolon)
 #enum op_set // =
 #enum op_set_add // +=
+#enum op_set_sub // -=
+#enum op_set_mul // *=
+#enum op_set_div // /=
+#enum op_set_mod // %=
 #enum op_eq // == (equal)
 #enum op_ne // != (not equal)
 #enum op_lt // < (less than)
@@ -1103,12 +1107,12 @@
 	op_text = negi_lang_tok_text(tok_i)
 
 	if op_level == op_level_set {
-		if op_text == "=" {
-			return op_set
-		}
-		if op_text == "+=" {
-			return op_set_add
-		}
+		if op_text == "=" { return op_set }
+		if op_text == "+=" { return op_set_add }
+		if op_text == "-=" { return op_set_sub }
+		if op_text == "*=" { return op_set_mul }
+		if op_text == "/=" { return op_set_div }
+		if op_text == "%=" { return op_set_mod }
 	}
 	if op_level == op_level_cmp {
 		if op_text == "==" {
@@ -1664,8 +1668,8 @@
 		negi_lang_gen_exp_set exp_i
 		return
 	}
-	if op == op_set_add {
-		negi_lang_gen_exp_set_add exp_i
+	if op == op_set_add || op == op_set_sub || op == op_set_mul || op == op_set_div || op == op_set_mod {
+		negi_lang_gen_exp_set_op exp_i
 		return
 	}
 
@@ -1710,11 +1714,20 @@
 	negi_lang_cmd_add cmd_cell_set, g_exp_tok_is(exp_i)
 	return
 
-#deffunc negi_lang_gen_exp_set_add int exp_i, \
-	local tok_i
+#deffunc negi_lang_gen_exp_set_op int exp_i, \
+	local tok_i, local set_op, local op
 
-	assert g_exp_kinds(exp_i) == exp_op && g_exp_ints(exp_i) == op_set_add
+	assert g_exp_kinds(exp_i) == exp_op
+	set_op = g_exp_ints(exp_i)
 	tok_i = g_exp_tok_is(exp_i)
+
+	op = op_err
+	if set_op == op_set_add { op = op_add }
+	if set_op == op_set_sub { op = op_sub }
+	if set_op == op_set_mul { op = op_mul }
+	if set_op == op_set_div { op = op_div }
+	if set_op == op_set_mod { op = op_mod }
+	assert op != op_err
 
 	// 左辺を計算して参照セルを得る。
 	negi_lang_gen_lval g_exp_exp_ls(exp_i)
@@ -1725,7 +1738,7 @@
 
 	// 右辺を計算して演算する。
 	negi_lang_gen_exp g_exp_exp_rs(exp_i)
-	negi_lang_cmd_add_int cmd_op, op_add, tok_i
+	negi_lang_cmd_add_int cmd_op, op, tok_i
 
 	// 参照セルに演算結果を代入する。
 	negi_lang_cmd_add cmd_cell_set, tok_i
