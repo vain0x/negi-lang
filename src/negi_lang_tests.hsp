@@ -282,30 +282,34 @@
 	eval_test "組み込み関数を呼べる", "array_len([1, 2, 3])", "", 3
 
 	eval_test "ラムダ式を使える", {"
-		let one = fun () { return 1 };
-		one() == 1
-	"}, "", 1
+		let f = fun() { return 42 };
+		f()
+	"}, "", 42
+	eval_test "ラムダ式の本体を式にできる", {"
+		let f = fun() 42;
+		f()
+	"}, "", 42
 	eval_test "ラムダ式が引数をとれる", {"
-		let f = fun (x) { return x * 2 };
+		let f = fun(x) { return x * 2 };
 		f(21)
 	"}, "", 42
 	eval_test "ラムダ式が複数の引数をとれる", {"
-		let div = fun (x, y) { return x / y };
+		let div = fun(x, y) { return x / y };
 		div(420, 10)
 	"}, "", 42
 	eval_test "ローカル変数に代入できる", {"
-		let f = fun (x, y) { x = x + 1; y = y + 2; return x * y };
+		let f = fun(x, y) { x = x + 1; y = y + 2; return x * y };
 		f(1, 19)
 	"}, "", 42
 	eval_test "ラムダ式の中でグローバル変数にアクセスできる", {"
 		let x = 2;
-		let f = fun (y) { x = x * y };
+		let f = fun(y) { x = x * y };
 		f(21);
 		x
 	"}, "", 42
 	eval_test "ラムダ式の中で外側のローカル変数にアクセスできる", {"
-		let make_counter = fun (x) {
-			return fun (y) {
+		let make_counter = fun(x) {
+			return fun(y) {
 				x = x + y;
 				return x;
 			};

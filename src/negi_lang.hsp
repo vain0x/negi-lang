@@ -983,10 +983,11 @@
 	}
 	tok_i++
 
-	if g_tok_kinds(tok_i) != tok_brace_l {
-		return negi_lang_exp_add_err("波カッコが必要です。", tok_i)
+	if g_tok_kinds(tok_i) == tok_brace_l {
+		body_exp_i = negi_lang_parse_block(tok_i)
+	} else {
+		body_exp_i = negi_lang_parse_term(tok_i)
 	}
-	body_exp_i = negi_lang_parse_block(tok_i)
 
 	fun_exp_i = negi_lang_exp_add_subexps(exp_fun, exp_is, subexp_count, fun_tok_i)
 	g_exp_exp_ls(fun_exp_i) = body_exp_i
@@ -1800,9 +1801,8 @@
 	// 関数本体を解析する。
 	// FIXME: break が関数の外側のループに飛ばないようにする。
 
-	// do `body` : return 0
+	// return `body`
 	negi_lang_gen_exp body_exp_i
-	negi_lang_cmd_add_int cmd_push_int, 0, tok_i
 	negi_lang_cmd_add cmd_return, tok_i
 
 	negi_lang_scope_pop
