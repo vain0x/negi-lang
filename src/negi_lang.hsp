@@ -395,9 +395,9 @@
 	g_data_stack_ptr_max = g_data_count / 4
 	g_data_heap_ptr = g_data_stack_ptr_max
 
-	// コールスタック
-	dim g_call_stack_cmd_is
-	g_call_stack_count = 0
+	// フレーム
+	dim g_frame_cmd_is
+	g_frame_count = 0
 
 	// 評価中に生成された文字列のリスト
 	sdim g_strs, 16, 1024
@@ -1907,22 +1907,22 @@
 	return
 
 // -----------------------------------------------
-// コールスタック
+// フレーム
 // -----------------------------------------------
 
-#deffunc negi_lang_call_stack_push int cmd_i, int array_val, int tok_i
+#deffunc negi_lang_frame_push int cmd_i, int array_val, int tok_i
 
-	g_call_stack_cmd_is(g_call_stack_count) = cmd_i
-	g_call_stack_array_vals(g_call_stack_count) = array_val
-	g_call_stack_tok_is(g_call_stack_count) = tok_i
-	g_call_stack_count++
+	g_frame_cmd_is(g_frame_count) = cmd_i
+	g_frame_array_vals(g_frame_count) = array_val
+	g_frame_tok_is(g_frame_count) = tok_i
+	g_frame_count++
 	return
 
-#defcfunc negi_lang_call_stack_pop
+#defcfunc negi_lang_frame_pop
 
-	assert g_call_stack_count >= 1
-	g_call_stack_count--
-	return g_call_stack_cmd_is(g_call_stack_count)
+	assert g_frame_count >= 1
+	g_frame_count--
+	return g_frame_cmd_is(g_frame_count)
 
 // -----------------------------------------------
 // 文字列リスト
@@ -2055,7 +2055,7 @@
 	assert g_cmd_kinds(cmd_i) == cmd_local_var
 	index = g_cmd_xs(cmd_i)
 
-	array_val = g_call_stack_array_vals(g_call_stack_count - 1)
+	array_val = g_frame_array_vals(g_frame_count - 1)
 
 	negi_lang_array_get ty_array, array_val, index, ty, val
 	negi_lang_stack_push ty, val
@@ -2123,7 +2123,7 @@
 			negi_lang_array_set ty_array, array_val, cnt, arg_tys(cnt), arg_vals(cnt)
 		loop
 
-		negi_lang_call_stack_push g_pc, array_val, call_tok_i
+		negi_lang_frame_push g_pc, array_val, call_tok_i
 		g_pc = g_label_cmd_is(body_label_i)
 		return
 	}
@@ -2146,7 +2146,7 @@
 #deffunc negi_lang_eval_return int cmd_i
 
 	assert g_cmd_kinds(cmd_i) == cmd_return
-	g_pc = negi_lang_call_stack_pop()
+	g_pc = negi_lang_frame_pop()
 	return
 
 // スタック上の2つの値に演算を適用し、結果をスタックに置く。
