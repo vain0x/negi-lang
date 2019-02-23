@@ -65,6 +65,7 @@ Git のコミットメッセージには以下のプレフィックスをつけ�
 - err: error
 - tok: token
 - exp: expression (式)
+- stmt: statement (文)
 - op: operator (演算子)
 - ty: type (型)
 - cmd: command (命令)
