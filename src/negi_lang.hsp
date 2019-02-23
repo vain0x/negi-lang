@@ -366,8 +366,8 @@
 	// 関数のリスト
 	// kind: 関数の種類
 	// name: 関数の名前
-	// scope_i: 関数本体が属するスコープ (ラムダのみ)
-	// label_i: 関数本体のラベル番号 (ラムダのみ)
+	// scope_i: 関数本体が属するスコープ (クロージャのみ)
+	// label_i: 関数本体のラベル番号 (クロージャのみ)
 	dim g_fun_kinds
 	sdim g_fun_names
 	dim g_fun_scope_is
