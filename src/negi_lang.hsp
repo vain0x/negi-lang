@@ -2013,22 +2013,22 @@
 
 // 配列の index 番目の要素を取得する。
 #deffunc negi_lang_array_get \
-	int ty, int val, int index, var out_ty, var out_val, \
-	local di
+	int array_ty, int array_i, int index, var out_ty, var out_val, \
+	local cell_i
 
-	di = negi_lang_array_ref(ty, val, index)
-	out_ty = g_cell_tys(di)
-	out_val = g_cell_vals(di)
+	cell_i = negi_lang_array_ref(array_ty, array_i, index)
+	out_ty = g_cell_tys(cell_i)
+	out_val = g_cell_vals(cell_i)
 	return
 
 // 配列の index 番目の要素を設定する。
 #deffunc negi_lang_array_set \
-	int array_ty, int array_i, int index, int elem_ty, int elem_val, \
-	local di
+	int array_ty, int array_i, int index, int item_ty, int item_val, \
+	local cell_i
 
-	di = negi_lang_array_ref(array_ty, array_i, index)
-	g_cell_tys(di) = elem_ty
-	g_cell_vals(di) = elem_val
+	cell_i = negi_lang_array_ref(array_ty, array_i, index)
+	g_cell_tys(cell_i) = item_ty
+	g_cell_vals(cell_i) = item_val
 	return
 
 // -----------------------------------------------
