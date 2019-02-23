@@ -402,7 +402,12 @@
 	g_data_heap_ptr = g_data_stack_ptr_max
 
 	// フレーム
+	// cmd_i: 戻りアドレス
+	// array_val: ローカル変数などが格納されている配列番号
+	// tok_i: フレームに関係のあるトークン番号
 	dim g_frame_cmd_is
+	dim g_frame_array_vals
+	dim g_frame_tok_is
 	g_frame_count = 0
 
 	// 評価中に生成された文字列のリスト
