@@ -217,9 +217,6 @@
 // x: 関数番号
 #enum cmd_make_fun
 
-// グローバル変数の参照セルをプッシュ
-#enum cmd_var
-
 // ローカル変数の参照セルをプッシュ
 // x: 何番目の変数か
 #enum cmd_local_var
@@ -365,11 +362,6 @@
 	// break: break のジャンプ先のラベル番号
 	dim g_loop_breaks
 	dim g_loop_count
-
-	// グローバル変数のリスト
-	// name: 変数名
-	sdim g_var_names
-	g_var_count = 0
 
 	// 関数のリスト
 	// kind: 関数の種類
@@ -1348,6 +1340,7 @@
 	g_scope_lens(g_scope_count) = 0
 	g_scope_tok_is(g_scope_count) = tok_i
 	g_scope_count++
+
 	g_scope_current = g_scope_count - 1
 	return
 
@@ -1372,7 +1365,7 @@
 	local scope_i
 
 	out_index = -1
-	scope_i = g_scope_count - 1
+	scope_i = g_scope_current
 	repeat g_local_count
 		if g_local_scope_is(cnt) != scope_i { continue }
 		if g_local_idents(cnt) != ident { continue }
@@ -1408,27 +1401,6 @@
 
 	assert g_loop_count >= 1
 	g_loop_count--
-	return
-
-// -----------------------------------------------
-// 変数リスト
-// -----------------------------------------------
-
-#deffunc negi_lang_var_add str name
-
-	g_var_names(g_var_count) = name
-	g_var_count++
-	return
-
-#deffunc negi_lang_var_find str name, var var_i
-
-	var_i = -1
-	repeat g_var_count
-		if g_var_names(cnt) == name {
-			var_i = cnt
-			break
-		}
-	loop
 	return
 
 // -----------------------------------------------
@@ -1485,24 +1457,15 @@
 // -----------------------------------------------
 
 #deffunc negi_lang_gen_exp_ident int exp_i, int lval, \
-	local name, local tok_i, local index, local var_i
+	local name, local tok_i, local local_i
 
 	assert g_exp_kinds(exp_i) == exp_ident
 	name = g_exp_strs(exp_i)
 	tok_i = g_exp_tok_is(exp_i)
 
-	negi_lang_local_find_var name, index
-	if index >= 0 {
-		negi_lang_cmd_add_int cmd_local_var, index, tok_i
-		if lval == false {
-			negi_lang_cmd_add cmd_cell_get, tok_i
-		}
-		return
-	}
-
-	negi_lang_var_find name, var_i
-	if var_i >= 0 {
-		negi_lang_cmd_add_int cmd_var, var_i, tok_i
+	negi_lang_local_find_var name, local_i
+	if local_i >= 0 {
+		negi_lang_cmd_add_int cmd_local_var, g_local_indexes(local_i), tok_i
 		if lval == false {
 			negi_lang_cmd_add cmd_cell_get, tok_i
 		}
@@ -1691,7 +1654,7 @@
 	return
 
 #deffunc negi_lang_gen_exp_let int exp_i, \
-	local ident_tok_i, local ident, local var_i
+	local ident_tok_i, local ident, local index
 
 	assert g_exp_kinds(exp_i) == exp_let
 	ident_tok_i = g_exp_ints(exp_i)
@@ -1699,10 +1662,10 @@
 
 	negi_lang_gen_exp g_exp_exp_rs(exp_i)
 
-	negi_lang_var_add ident
-	var_i = g_var_count - 1
+	negi_lang_local_add_var ident, ident_tok_i
+	index = g_local_indexes(g_local_count - 1)
 
-	negi_lang_cmd_add_int cmd_var, var_i, g_exp_tok_is(exp_i)
+	negi_lang_cmd_add_int cmd_local_var, index, g_exp_tok_is(exp_i)
 	negi_lang_cmd_add cmd_swap, g_exp_tok_is(exp_i)
 	negi_lang_cmd_add cmd_cell_set, g_exp_tok_is(exp_i)
 	return
@@ -1915,12 +1878,6 @@
 	g_data_heap_ptr += count
 	return
 
-// グローバル変数の参照セル値を取得する。
-#defcfunc negi_lang_heap_var_ref int var_i
-
-	assert 0 <= var_i && var_i < g_var_count
-	return g_data_stack_ptr_max + var_i
-
 // -----------------------------------------------
 // フレーム
 // -----------------------------------------------
@@ -2012,7 +1969,7 @@
 
 	if (0 <= index && index < g_array_lens(array_val)) == false {
 		negi_lang_eval_abort "配列の要素番号が不正です。", 0 // FIXME: 位置情報
-		return
+		return 0
 	}
 
 	return g_array_dls(array_val) + index
@@ -2057,15 +2014,6 @@
 
 	array_val = negi_lang_array_add(0, len)
 	negi_lang_stack_push ty_array, array_val
-	return
-
-#deffunc negi_lang_eval_var int cmd_i, \
-	local var_i, local ty, local val
-
-	assert g_cmd_kinds(cmd_i) == cmd_var
-	var_i = g_cmd_xs(cmd_i)
-
-	negi_lang_stack_push ty_cell, negi_lang_heap_var_ref(var_i)
 	return
 
 #deffunc negi_lang_eval_local_var int cmd_i, \
@@ -2349,10 +2297,6 @@
 			negi_lang_stack_push ty_fun, g_cmd_xs(cmd_i)
 			continue
 		}
-		if g_cmd_kinds(cmd_i) == cmd_var {
-			negi_lang_eval_var cmd_i
-			continue
-		}
 		if g_cmd_kinds(cmd_i) == cmd_local_var {
 			negi_lang_eval_local_var cmd_i
 			continue
@@ -2412,12 +2356,17 @@
 	return
 
 #deffunc negi_lang_eval \
-	local var_dl, local var_dr
+	local global_var_count, local array_val, local exit_cmd_i
 
 	assert g_cmd_count != 0
 
+	exit_cmd_i = g_cmd_count - 1
+	assert g_cmd_kinds(exit_cmd_i) == cmd_exit
+
 	// グローバル変数の領域を確保する。
-	negi_lang_heap_alloc g_var_count, var_dl, var_dr
+	global_var_count = g_scope_lens(0)
+	array_val = negi_lang_array_add(global_var_count, global_var_count)
+	negi_lang_frame_push exit_cmd_i, array_val, 0
 
 	negi_lang_eval_main
 	return
