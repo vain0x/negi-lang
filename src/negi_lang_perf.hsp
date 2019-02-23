@@ -1,0 +1,52 @@
+// ネギ言語処理系のパフォーマンステスト
+
+#runtime "hsp3utf"
+
+#undef _debug
+#include "negi_lang.hsp"
+
+#module m_negi_lang_perf
+
+#uselib "winmm.dll"
+#cfunc timeGetTime "timeGetTime"
+
+#const true 1
+#const false 0
+
+#deffunc perf str name, str src, \
+	local exit_code, local output, local begin_time, local end_time
+
+	logmes "[PERF] " + name
+
+	begin_time = timeGetTime()
+	negi_lang_eval_src src, exit_code
+	end_time = timeGetTime()
+
+	negi_lang_err_summary output
+
+	logmes "  time = " + double(end_time - begin_time) / 1000 + " sec"
+
+	if exit_code != 0 {
+		logmes "  exit_code = " + exit_code
+	}
+
+	if output != "" {
+		logmes output
+	}
+	return
+
+#deffunc main
+
+	perf "カウント", {"
+		let i = 0;
+		while (i < 10000) {
+			i += 1;
+		}
+		i
+	"}
+	mes "完了"
+	return
+
+#global
+
+	main
