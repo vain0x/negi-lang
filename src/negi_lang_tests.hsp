@@ -284,6 +284,10 @@
 		let div = fun (x, y) { return x / y };
 		div(420, 10)
 	"}, "", 42
+	eval_test "ローカル変数に代入できる", {"
+		let f = fun (x, y) { x = x + 1; y = y + 2; return x * y };
+		f(1, 19)
+	"}, "", 42
 
 	test_end
 	return
