@@ -280,6 +280,10 @@
 		let f = fun (x) { return x * 2 };
 		f(21)
 	"}, "", 42
+	eval_test "ラムダ式が複数の引数をとれる", {"
+		let div = fun (x, y) { return x / y };
+		div(420, 10)
+	"}, "", 42
 
 	test_end
 	return
