@@ -30,6 +30,18 @@
 	dialog "FATAL ERROR: " + str(%1) + " \nFILE: " + __FILE__ + "\nLINE: " + __LINE__, 1, "negi-lang" :\
 	end 1
 
+// -----------------------------------------------
+// デバッグ用
+// -----------------------------------------------
+
+#ifdef _DEBUG
+#define d_trace(%1) logmes (%1)
+#define debug(%1) logmes {"%1 = "} + (%1)
+#else
+#define d_trace(%1) //
+#define debug(%1) //
+#endif
+
 // ###############################################
 // 定数
 // ###############################################
@@ -515,7 +527,7 @@
 // src_l, src_r: エラーに関連する、ソースコード上の範囲を表す。
 #deffunc negi_lang_err_add str message, int src_l, int src_r
 
-	logmes "err: " + message + " near" + strmid(g_src, src_l, src_r - src_l)
+	d_trace "err: " + message + ", text = " + strmid(g_src, src_l, src_r - src_l)
 
 	g_err_messages(g_err_count) = message
 	g_err_src_ls(g_err_count) = src_l
@@ -692,7 +704,7 @@
 		}
 
 		// このとき、文字 c はトークンとして不正なもの。エラーを表すトークンとして追加する。
-		logmes "tok_err char=" + c
+		d_trace "tok_err char = " + c
 		r++
 		negi_lang_tok_add tok_err, l, r
 	loop
@@ -1346,8 +1358,7 @@
 	assert g_exp_i_root != exp_i_none
 
 	if g_tok_kinds(tok_i) != tok_eof {
-		logmes "tok_i = " + tok_i
-		logmes "tok_kind = " + g_tok_kinds(tok_i)
+		d_trace "tok_i = " + tok_i + ", kind = " + g_tok_kinds(tok_i)
 		negi_lang_err_add "この字句を解釈できませんでした。", g_tok_src_ls(tok_i), g_tok_src_rs(tok_i)
 	}
 	return
@@ -1898,7 +1909,7 @@
 		negi_lang_cmd_add_str cmd_err, g_exp_strs(exp_i), g_exp_tok_is(exp_i)
 		return
 	}
-	logmes "exp_kind = " + g_exp_kinds(exp_i)
+	d_trace "kind = " + g_exp_kinds(exp_i)
 	failwith "unknown expression kind"
 
 // コード生成を実行する。
@@ -1941,7 +1952,7 @@
 // スタックに値を積む。
 #deffunc negi_lang_stack_push int ty, int val
 
-	logmes "push ty=" + ty + " val=" + val
+	d_trace "push ty=" + ty + " val=" + val
 
 	if g_cell_i_stack_end >= g_cell_i_stack_max {
 		// FIXME: エラー箇所を報告する
@@ -1962,7 +1973,7 @@
 	out_ty = g_cell_tys(g_cell_i_stack_end)
 	out_val = g_cell_vals(g_cell_i_stack_end)
 
-	logmes "pop ty=" + out_ty + " val=" + out_val
+	d_trace "pop ty=" + out_ty + " val=" + out_val
 	return
 
 // -----------------------------------------------
@@ -2467,7 +2478,7 @@
 		return
 	}
 
-	logmes "op = " + op
+	d_trace "op = " + op
 	failwith "Unknown op"
 
 // 評価のメインループ。
@@ -2556,7 +2567,7 @@
 			continue
 		}
 
-		logmes "cmd_kind = " + g_cmd_kinds(cmd_i)
+		d_trace "cmd_kind = " + g_cmd_kinds(cmd_i)
 		failwith "Unknown cmd_kind"
 	loop
 	return
