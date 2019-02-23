@@ -397,12 +397,12 @@
 	g_data_stack_ptr_max = g_data_count / 4
 	g_data_heap_ptr = g_data_stack_ptr_max
 
-	// フレーム
-	// cmd_i: 戻りアドレス
-	// array_val: ローカル変数などが格納されている配列番号
+	// フレーム (関数呼び出しのメタ情報)
+	// cmd_i: return 直後に実行するコマンド番号
+	// env_i: 実行中の環境番号
 	// tok_i: フレームに関係のあるトークン番号
 	dim g_frame_cmd_is
-	dim g_frame_array_vals
+	dim g_frame_env_is
 	dim g_frame_tok_is
 	g_frame_count = 0
 
@@ -417,6 +417,13 @@
 	dim g_array_dls, 1024
 	dim g_array_drs, 1024
 	g_array_count = 0
+
+	// 評価中に生成された環境のリスト
+	// parent: この環境の親となる環境番号 (なければ 0)
+	// array_is: 引数やローカル変数を格納する配列番号
+	dim g_env_parents
+	dim g_env_array_is
+	g_env_count = 0
 
 	// プログラムカウンタ (次に実行するコマンド番号)
 	g_pc = 0
@@ -1891,10 +1898,10 @@
 // フレーム
 // -----------------------------------------------
 
-#deffunc negi_lang_frame_push int cmd_i, int array_val, int tok_i
+#deffunc negi_lang_frame_push int cmd_i, int env_i, int tok_i
 
 	g_frame_cmd_is(g_frame_count) = cmd_i
-	g_frame_array_vals(g_frame_count) = array_val
+	g_frame_env_is(g_frame_count) = env_i
 	g_frame_tok_is(g_frame_count) = tok_i
 	g_frame_count++
 	return
@@ -1994,6 +2001,28 @@
 	return
 
 // -----------------------------------------------
+// 環境リスト
+// -----------------------------------------------
+
+#defcfunc negi_lang_env_add int parent_env_i, int fun_i, \
+	local array_i, local scope_i
+
+	scope_i = g_fun_scope_is(fun_i)
+	array_len = g_scope_lens(scope_i)
+	array_i = negi_lang_array_add(array_len, array_len)
+
+	g_env_parents(g_env_count) = parent_env_i
+	g_env_array_is(g_env_count) = array_i
+	g_env_count++
+	return g_env_count - 1
+
+#defcfunc negi_lang_env_ref int env_i, int index, \
+	local array_i
+
+	array_i = g_env_array_is(env_i)
+	return negi_lang_array_ref(ty_array, array_i, index)
+
+// -----------------------------------------------
 // 評価
 // -----------------------------------------------
 
@@ -2026,14 +2055,14 @@
 	return
 
 #deffunc negi_lang_eval_local_var int cmd_i, \
-	local index, local array_val
+	local index, local env_i
 
 	assert g_cmd_kinds(cmd_i) == cmd_local_var
 	index = g_cmd_xs(cmd_i)
 
-	array_val = g_frame_array_vals(g_frame_count - 1)
+	env_i = g_frame_env_is(g_frame_count - 1)
 
-	negi_lang_stack_push ty_cell, negi_lang_array_ref(ty_array, array_val, index)
+	negi_lang_stack_push ty_cell, negi_lang_env_ref(env_i, index)
 	return
 
 #deffunc negi_lang_eval_cell_get int cmd_i, \
@@ -2099,7 +2128,7 @@
 #deffunc negi_lang_eval_call int cmd_i, \
 	local len, local call_tok_i, local i, \
 	local fun_ty, local fun_val, local arg_tys, local arg_vals, \
-	local scope_label_i, local body_label_i, local array_val
+	local body_label_i, local array_val, local env_i
 
 	assert g_cmd_kinds(cmd_i) == cmd_call
 	len = g_cmd_xs(cmd_i)
@@ -2120,17 +2149,18 @@
 
 	// closure
 	if g_fun_kinds(fun_val) == fun_kind_closure {
-		scope_label_i = g_fun_scope_is(fun_val)
 		body_label_i = g_fun_label_is(fun_val)
 
+		env_i = negi_lang_env_add(0, fun_val)
+
 		// 実引数を配列に置く。
-		array_val = negi_lang_array_add(g_scope_lens(scope_label_i), g_scope_lens(scope_label_i))
-		repeat g_scope_lens(scope_label_i)
+		array_val = g_env_array_is(env_i)
+		repeat len
 			if cnt >= len { break }
 			negi_lang_array_set ty_array, array_val, cnt, arg_tys(cnt), arg_vals(cnt)
 		loop
 
-		negi_lang_frame_push g_pc, array_val, call_tok_i
+		negi_lang_frame_push g_pc, env_i, call_tok_i
 		g_pc = g_label_cmd_is(body_label_i)
 		return
 	}
@@ -2365,17 +2395,16 @@
 	return
 
 #deffunc negi_lang_eval \
-	local global_var_count, local array_val, local exit_cmd_i
+	local global_var_count, local array_val, local exit_cmd_i, local main_env_i
 
 	assert g_cmd_count != 0
 
 	exit_cmd_i = g_cmd_count - 1
 	assert g_cmd_kinds(exit_cmd_i) == cmd_exit
 
-	// グローバル変数の領域を確保する。
-	global_var_count = g_scope_lens(0)
-	array_val = negi_lang_array_add(global_var_count, global_var_count)
-	negi_lang_frame_push exit_cmd_i, array_val, 0
+	// トップレベルを1個のクロージャにする。
+	main_env_i = negi_lang_env_add(0, g_fun_i_main)
+	negi_lang_frame_push exit_cmd_i, main_env_i, 0
 
 	negi_lang_eval_main
 	return
