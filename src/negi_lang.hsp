@@ -157,6 +157,7 @@
 #enum op_err
 #enum op_semi // ; (semicolon)
 #enum op_set // =
+#enum op_set_add // +=
 #enum op_eq // == (equal)
 #enum op_ne // != (not equal)
 #enum op_lt // < (less than)
@@ -239,6 +240,9 @@
 
 // スタック上の2つの要素を交換
 #enum cmd_swap
+
+// スタックの一番上の要素をもう1つ積む
+#enum cmd_dup
 
 // 関数呼び出し
 // x: 引数の個数
@@ -1102,6 +1106,9 @@
 		if op_text == "=" {
 			return op_set
 		}
+		if op_text == "+=" {
+			return op_set_add
+		}
 	}
 	if op_level == op_level_cmp {
 		if op_text == "==" {
@@ -1657,6 +1664,10 @@
 		negi_lang_gen_exp_set exp_i
 		return
 	}
+	if op == op_set_add {
+		negi_lang_gen_exp_set_add exp_i
+		return
+	}
 
 	negi_lang_gen_exp g_exp_exp_ls(exp_i)
 	negi_lang_gen_exp g_exp_exp_rs(exp_i)
@@ -1697,6 +1708,27 @@
 	negi_lang_gen_lval g_exp_exp_ls(exp_i)
 	negi_lang_gen_exp g_exp_exp_rs(exp_i)
 	negi_lang_cmd_add cmd_cell_set, g_exp_tok_is(exp_i)
+	return
+
+#deffunc negi_lang_gen_exp_set_add int exp_i, \
+	local tok_i
+
+	assert g_exp_kinds(exp_i) == exp_op && g_exp_ints(exp_i) == op_set_add
+	tok_i = g_exp_tok_is(exp_i)
+
+	// 左辺を計算して参照セルを得る。
+	negi_lang_gen_lval g_exp_exp_ls(exp_i)
+
+	// この参照セルは2回使うので複製する。2つ目は値に変換する。
+	negi_lang_cmd_add cmd_dup, tok_i
+	negi_lang_cmd_add cmd_cell_get, tok_i
+
+	// 右辺を計算して演算する。
+	negi_lang_gen_exp g_exp_exp_rs(exp_i)
+	negi_lang_cmd_add_int cmd_op, op_add, tok_i
+
+	// 参照セルに演算結果を代入する。
+	negi_lang_cmd_add cmd_cell_set, tok_i
 	return
 
 #deffunc negi_lang_gen_exp_let int exp_i, \
@@ -2184,10 +2216,20 @@
 #deffunc negi_lang_eval_swap int cmd_i, \
 	local val_l, local val_r, local ty_l, local ty_r
 
+	assert g_cmd_kinds(cmd_i) == cmd_swap
 	negi_lang_stack_pop ty_l, val_l
 	negi_lang_stack_pop ty_r, val_r
 	negi_lang_stack_push ty_l, val_l
 	negi_lang_stack_push ty_r, val_r
+	return
+
+#deffunc negi_lang_eval_dup int cmd_i, \
+	local ty, local val
+
+	assert g_cmd_kinds(cmd_i) == cmd_dup
+	negi_lang_stack_pop ty, val
+	negi_lang_stack_push ty, val
+	negi_lang_stack_push ty, val
 	return
 
 #deffunc negi_lang_eval_call int cmd_i, \
@@ -2428,6 +2470,10 @@
 		}
 		if g_cmd_kinds(cmd_i) == cmd_swap {
 			negi_lang_eval_swap cmd_i
+			continue
+		}
+		if g_cmd_kinds(cmd_i) == cmd_dup {
+			negi_lang_eval_dup cmd_i
 			continue
 		}
 		if g_cmd_kinds(cmd_i) == cmd_call {
