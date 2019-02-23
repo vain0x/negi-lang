@@ -189,6 +189,9 @@
 
 // 以下の演算子はコンパイラによって生成される。
 
+// 配列の要素の参照を取得する。
+#enum op_index_ref
+
 // 配列の末尾に要素を追加する。
 #enum op_array_push
 
@@ -1668,7 +1671,7 @@
 
 // 2項演算を行うコードを生成する。
 // 評価の実装を簡単にするため、式を適当に変形する。
-#deffunc negi_lang_gen_exp_op int exp_i, \
+#deffunc negi_lang_gen_exp_op int exp_i, int lval, \
 	local op
 
 	assert g_exp_kinds(exp_i) == exp_op
@@ -1717,8 +1720,13 @@
 		negi_lang_cmd_add_negate g_exp_tok_is(exp_i)
 		return
 	}
+	if op == op_ix && lval {
+		negi_lang_cmd_add_int cmd_op, op_index_ref, g_exp_tok_is(exp_i)
+		return
+	}
 
 	negi_lang_cmd_add_int cmd_op, op, g_exp_tok_is(exp_i)
+
 	return
 
 #deffunc negi_lang_gen_exp_set int exp_i
@@ -1850,6 +1858,10 @@
 		negi_lang_gen_exp_ident exp_i, lval
 		return
 	}
+	if g_exp_kinds(exp_i) == exp_op && g_exp_ints(exp_i) == op_ix {
+		negi_lang_gen_exp_op exp_i, lval
+		return
+	}
 
 	negi_lang_cmd_add_err "左辺値が必要です。", g_exp_tok_is(exp_i)
 	return
@@ -1878,7 +1890,7 @@
 		return
 	}
 	if g_exp_kinds(exp_i) == exp_op {
-		negi_lang_gen_exp_op exp_i
+		negi_lang_gen_exp_op exp_i, false
 		return
 	}
 	if g_exp_kinds(exp_i) == exp_let {
@@ -2415,6 +2427,14 @@
 		if ty == ty_array && ty_r == ty_int {
 			negi_lang_array_get ty, val_l, val_r, ty_t, val_t
 			negi_lang_stack_push ty_t, val_t
+			return
+		}
+		negi_lang_eval_abort "type error", g_cmd_tok_is(cmd_i)
+		return
+	}
+	if op == op_index_ref {
+		if ty == ty_array && ty_r == ty_int {
+			negi_lang_stack_push ty_cell, negi_lang_array_ref(ty, val_l, val_r)
 			return
 		}
 		negi_lang_eval_abort "type error", g_cmd_tok_is(cmd_i)

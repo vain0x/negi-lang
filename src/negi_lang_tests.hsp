@@ -330,6 +330,12 @@
 		array_push(a, 3);
 		((a[0] * 10 + a[1]) * 10 + a[2]) * 10 + array_len(a)
 	"}, "", 1233
+	eval_test "配列の要素に代入できる", {"
+		let a = [1];
+		let b = a;
+		a[0] = 42;
+		b[0]
+	"}, "", 42
 
 	test_end
 	return
