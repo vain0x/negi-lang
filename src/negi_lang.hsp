@@ -185,6 +185,12 @@
 #enum op_level_mul // multitive
 
 // -----------------------------------------------
+// スコープ番号
+// -----------------------------------------------
+
+#const scope_i_global 0
+
+// -----------------------------------------------
 // 命令の種類
 // -----------------------------------------------
 
@@ -219,6 +225,7 @@
 
 // ローカル変数の参照セルをプッシュ
 // x: 何番目の変数か
+// y: 変数が属するスコープ番号
 #enum cmd_local_var
 
 // スタックの一番上にある参照セルの値を取得する
@@ -345,7 +352,9 @@
 	dim g_scope_lens
 	dim g_scope_tok_is
 	g_scope_count = 1
-	g_scope_current = 0
+	g_scope_current = scope_i_global
+
+	g_scope_parents(scope_i_global) = -1
 
 	// ローカル識別子リスト
 	// scope_is: 識別子が属するスコープ番号
@@ -376,11 +385,12 @@
 
 	// 命令列
 	// kind: 命令の種類
-	// x: 命令がとる整数型の引数 (1つ目)
+	// x, y: 命令がとる整数型の引数
 	// str: 命令がとる文字列型の引数
 	// tok_i: 命令に関連するトークン番号
 	dim g_cmd_kinds
 	dim g_cmd_xs
+	dim g_cmd_ys
 	sdim g_cmd_strs
 	dim g_cmd_tok_is
 	g_cmd_count = 0
@@ -420,10 +430,15 @@
 
 	// 評価中に生成された環境のリスト
 	// parent: この環境の親となる環境番号 (なければ 0)
+	// scope_i: この環境に対応するスコープ番号
 	// array_is: 引数やローカル変数を格納する配列番号
 	dim g_env_parents
+	dim g_env_scope_is
 	dim g_env_array_is
 	g_env_count = 0
+
+	// グローバル環境
+	g_env_i_global = -1
 
 	// プログラムカウンタ (次に実行するコマンド番号)
 	g_pc = 0
@@ -1373,11 +1388,17 @@
 
 	out_index = -1
 	scope_i = g_scope_current
-	repeat g_local_count
-		if g_local_scope_is(cnt) != scope_i { continue }
-		if g_local_idents(cnt) != ident { continue }
-		out_index = cnt
-		break
+	repeat
+		repeat g_local_count
+			if g_local_scope_is(cnt) != scope_i { continue }
+			if g_local_idents(cnt) != ident { continue }
+			out_index = cnt
+			break
+		loop
+
+		if g_scope_parents(scope_i) < 0 { break }
+		assert scope_i != g_scope_parents(scope_i)
+		scope_i = g_scope_parents(scope_i)
 	loop
 	return
 
@@ -1420,6 +1441,7 @@
 
 	g_cmd_kinds(g_cmd_count) = kind
 	g_cmd_xs(g_cmd_count) = 0
+	g_cmd_ys(g_cmd_count) = 0
 	g_cmd_strs(g_cmd_count) = ""
 	g_cmd_tok_is(g_cmd_count) = tok_i
 	g_cmd_count++
@@ -1446,6 +1468,12 @@
 	g_cmd_strs(g_cmd_count - 1) = value
 	return
 
+#deffunc negi_lang_cmd_add_local_var int index, int scope_i, int tok_i
+
+	negi_lang_cmd_add_int cmd_local_var, index, tok_i
+	g_cmd_ys(g_cmd_count - 1) = scope_i
+	return
+
 // 否定演算の命令を追加する。 (!x ---> x == false)
 #deffunc negi_lang_cmd_add_negate int tok_i
 
@@ -1464,7 +1492,7 @@
 // -----------------------------------------------
 
 #deffunc negi_lang_gen_exp_ident int exp_i, int lval, \
-	local name, local tok_i, local local_i
+	local name, local tok_i, local local_i, local scope_i
 
 	assert g_exp_kinds(exp_i) == exp_ident
 	name = g_exp_strs(exp_i)
@@ -1472,7 +1500,8 @@
 
 	negi_lang_local_find_var name, local_i
 	if local_i >= 0 {
-		negi_lang_cmd_add_int cmd_local_var, g_local_indexes(local_i), tok_i
+		scope_i = g_local_scope_is(local_i)
+		negi_lang_cmd_add_local_var g_local_indexes(local_i), scope_i, tok_i
 		if lval == false {
 			negi_lang_cmd_add cmd_cell_get, tok_i
 		}
@@ -1830,7 +1859,7 @@
 	negi_lang_cmd_add cmd_exit, g_tok_count - 1
 
 	// トップレベルに対応する関数を登録する。
-	g_fun_i_main = negi_lang_fun_add_closure(main_label_i)
+	g_fun_i_main = negi_lang_fun_add_closure(scope_i_global, main_label_i)
 
 	// ラベルを解決する。
 	repeat g_cmd_count
@@ -2012,12 +2041,21 @@
 	array_i = negi_lang_array_add(array_len, array_len)
 
 	g_env_parents(g_env_count) = parent_env_i
+	g_env_scope_is(g_env_count) = scope_i
 	g_env_array_is(g_env_count) = array_i
 	g_env_count++
 	return g_env_count - 1
 
-#defcfunc negi_lang_env_ref int env_i, int index, \
-	local array_i
+#defcfunc negi_lang_env_ref int source_env_i, int index, int scope_i, \
+	local array_i, local env_i
+
+	env_i = source_env_i
+	repeat
+		if g_env_scope_is(env_i) == scope_i { break }
+
+		assert env_i != g_env_parents(env_i)
+		env_i = g_env_parents(env_i)
+	loop
 
 	array_i = g_env_array_is(env_i)
 	return negi_lang_array_ref(ty_array, array_i, index)
@@ -2055,14 +2093,15 @@
 	return
 
 #deffunc negi_lang_eval_local_var int cmd_i, \
-	local index, local env_i
+	local index, local scope_i, local env_i
 
 	assert g_cmd_kinds(cmd_i) == cmd_local_var
 	index = g_cmd_xs(cmd_i)
+	scope_i = g_cmd_ys(cmd_i)
 
 	env_i = g_frame_env_is(g_frame_count - 1)
 
-	negi_lang_stack_push ty_cell, negi_lang_env_ref(env_i, index)
+	negi_lang_stack_push ty_cell, negi_lang_env_ref(env_i, index, scope_i)
 	return
 
 #deffunc negi_lang_eval_cell_get int cmd_i, \
@@ -2151,7 +2190,7 @@
 	if g_fun_kinds(fun_val) == fun_kind_closure {
 		body_label_i = g_fun_label_is(fun_val)
 
-		env_i = negi_lang_env_add(0, fun_val)
+		env_i = negi_lang_env_add(g_env_i_global, fun_val)
 
 		// 実引数を配列に置く。
 		array_val = g_env_array_is(env_i)
@@ -2395,16 +2434,16 @@
 	return
 
 #deffunc negi_lang_eval \
-	local global_var_count, local array_val, local exit_cmd_i, local main_env_i
+	local global_var_count, local array_val, local exit_cmd_i
 
 	assert g_cmd_count != 0
 
 	exit_cmd_i = g_cmd_count - 1
 	assert g_cmd_kinds(exit_cmd_i) == cmd_exit
 
-	// トップレベルを1個のクロージャにする。
-	main_env_i = negi_lang_env_add(0, g_fun_i_main)
-	negi_lang_frame_push exit_cmd_i, main_env_i, 0
+	// グローバル環境を生成する。
+	g_env_i_global = negi_lang_env_add(-1, g_fun_i_main)
+	negi_lang_frame_push exit_cmd_i, g_env_i_global, 0
 
 	negi_lang_eval_main
 	return

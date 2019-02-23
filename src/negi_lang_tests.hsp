@@ -288,6 +288,12 @@
 		let f = fun (x, y) { x = x + 1; y = y + 2; return x * y };
 		f(1, 19)
 	"}, "", 42
+	eval_test "ラムダ式の中でグローバル変数にアクセスできる", {"
+		let x = 2;
+		let f = fun (y) { x = x * y };
+		f(21);
+		x
+	"}, "", 42
 
 	test_end
 	return
