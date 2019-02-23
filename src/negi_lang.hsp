@@ -1534,6 +1534,10 @@
 		negi_lang_cmd_add_int cmd_push_fun, 0, tok_i
 		return
 	}
+	if name == "array_push" && lval == false {
+		negi_lang_cmd_add_int cmd_push_fun, 1, tok_i
+		return
+	}
 
 	negi_lang_cmd_add_err "未定義の変数を使用しています。", g_exp_tok_is(exp_i)
 	return
@@ -2026,6 +2030,34 @@
 	g_array_count++
 	return g_array_count - 1
 
+// 配列のキャパシティを new_len 以上にする。
+// 現在のキャパシティでは足りなければ、新しい領域を確保して移動する。
+#deffunc negi_lang_array_reserve \
+	int array_ty, int array_i, int new_len, \
+	local current_len, local current_cell_l, local current_cell_r, \
+	local new_capacity, local new_cell_l, local new_cell_r
+
+	current_cell_l = g_array_cell_ls(array_i)
+	current_cell_r = g_array_cell_rs(array_i)
+
+	if new_len <= current_cell_r - current_cell_l {
+		return
+	}
+
+	assert g_array_lens(array_i) <= new_len
+
+	new_capacity = new_len + (new_len / 2)
+	negi_lang_heap_alloc new_capacity, new_cell_l, new_cell_r
+
+	g_array_cell_ls(array_i) = new_cell_l
+	g_array_cell_rs(array_i) = new_cell_r
+
+	repeat g_array_lens(array_i)
+		g_cell_tys(new_cell_l + cnt) = g_cell_tys(current_cell_l + cnt)
+		g_cell_vals(new_cell_l + cnt) = g_cell_vals(current_cell_l + cnt)
+	loop
+	return
+
 // 配列の末尾に要素を追加する。
 #deffunc negi_lang_array_push \
 	int array_ty, int array_i, int elem_ty, int elem_val, \
@@ -2034,10 +2066,7 @@
 	assert array_ty == ty_array
 	index = g_array_lens(array_i)
 
-	if index >= g_array_cell_rs(array_i) - g_array_cell_ls(array_i) {
-		failwith "配列の要素数が限界を超えました。配列の拡張は未実装です。"
-		return
-	}
+	negi_lang_array_reserve array_ty, array_i, index + 1
 
 	g_array_lens(array_i)++
 	negi_lang_array_set array_ty, array_i, index, elem_ty, elem_val
@@ -2303,6 +2332,15 @@
 		negi_lang_stack_push ty_int, g_array_lens(arg_vals(0))
 		return
 	}
+	if fun_val == 1 {
+		if len != 2 || arg_tys(0) != ty_array {
+			negi_lang_eval_abort "array_push error", call_tok_i
+			return
+		}
+		negi_lang_array_push arg_tys(0), arg_vals(0), arg_tys(1), arg_vals(1)
+		negi_lang_stack_push ty_array, arg_vals(0)
+		return
+	}
 	return
 
 #deffunc negi_lang_eval_return int cmd_i
@@ -2454,7 +2492,7 @@
 			continue
 		}
 		if g_cmd_kinds(cmd_i) == cmd_push_fun {
-			negi_lang_stack_push ty_fun, 0
+			negi_lang_stack_push ty_fun, g_cmd_xs(cmd_i)
 			continue
 		}
 		if g_cmd_kinds(cmd_i) == cmd_push_closure {

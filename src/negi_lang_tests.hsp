@@ -323,6 +323,14 @@
 		s
 	"}, "", 121
 
+	eval_test "配列が自動で拡張される", {"
+		let a = [];
+		array_push(a, 1);
+		array_push(a, 2);
+		array_push(a, 3);
+		((a[0] * 10 + a[1]) * 10 + a[2]) * 10 + array_len(a)
+	"}, "", 1233
+
 	test_end
 	return
 
