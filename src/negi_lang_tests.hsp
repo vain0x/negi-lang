@@ -294,6 +294,21 @@
 		f(21);
 		x
 	"}, "", 42
+	eval_test "ラムダ式の中で外側のローカル変数にアクセスできる", {"
+		let make_counter = fun (x) {
+			return fun (y) {
+				x = x + y;
+				return x;
+			};
+		};
+		let c = make_counter(0);
+		let s = 0;
+		s = s * 10 + c(1);
+		s = s * 10 + c(1);
+		let d = make_counter(0);
+		s = s * 10 + d(1);
+		s
+	"}, "", 121
 
 	test_end
 	return

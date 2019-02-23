@@ -219,9 +219,9 @@
 // 関数値をプッシュする
 #enum cmd_push_fun
 
-// ラムダ式をプッシュする
+// クロージャを生成してプッシュする
 // x: 関数番号
-#enum cmd_make_fun
+#enum cmd_push_closure
 
 // ローカル変数の参照セルをプッシュ
 // x: 何番目の変数か
@@ -267,6 +267,9 @@
 
 // 関数。値は g_funs の要素番号。
 #enum ty_fun
+
+// クロージャ。値は g_closures の要素番号。
+#enum ty_closure
 
 // 参照セル。値は g_data の要素番号。
 #enum ty_cell
@@ -439,6 +442,13 @@
 
 	// グローバル環境
 	g_env_i_global = -1
+
+	// 評価中に生成されたクロージャのリスト
+	// fun_i: このクロージャに対応する関数番号
+	// env_i: このクロージャが生成された環境番号
+	dim g_closure_fun_is
+	dim g_closure_env_is
+	g_closure_count = 0
 
 	// プログラムカウンタ (次に実行するコマンド番号)
 	g_pc = 0
@@ -1755,7 +1765,7 @@
 
 	// 関数を生成する。
 	negi_lang_cmd_add_int cmd_label, next_label_i, tok_i
-	negi_lang_cmd_add_int cmd_make_fun, fun_i, tok_i
+	negi_lang_cmd_add_int cmd_push_closure, fun_i, tok_i
 
 	return
 
@@ -2034,7 +2044,7 @@
 // -----------------------------------------------
 
 #defcfunc negi_lang_env_add int parent_env_i, int fun_i, \
-	local array_i, local scope_i
+	local array_i, local array_len, local scope_i
 
 	scope_i = g_fun_scope_is(fun_i)
 	array_len = g_scope_lens(scope_i)
@@ -2051,6 +2061,7 @@
 
 	env_i = source_env_i
 	repeat
+		assert 0 <= env_i && env_i < g_env_count
 		if g_env_scope_is(env_i) == scope_i { break }
 
 		assert env_i != g_env_parents(env_i)
@@ -2059,6 +2070,19 @@
 
 	array_i = g_env_array_is(env_i)
 	return negi_lang_array_ref(ty_array, array_i, index)
+
+// -----------------------------------------------
+// クロージャリスト
+// -----------------------------------------------
+
+#defcfunc negi_lang_closure_add int fun_i, int env_i
+
+	assert g_fun_kinds(fun_i) == fun_kind_closure
+
+	g_closure_fun_is(g_closure_count) = fun_i
+	g_closure_env_is(g_closure_count) = env_i
+	g_closure_count++
+	return g_closure_count - 1
 
 // -----------------------------------------------
 // 評価
@@ -2090,6 +2114,16 @@
 
 	array_val = negi_lang_array_add(0, len)
 	negi_lang_stack_push ty_array, array_val
+	return
+
+#deffunc negi_lang_eval_push_closure int cmd_i, \
+	local fun_i, local env_i, local closure_i
+
+	fun_i = g_cmd_xs(cmd_i)
+	env_i = g_frame_env_is(g_frame_count - 1)
+	closure_i = negi_lang_closure_add(fun_i, env_i)
+
+	negi_lang_stack_push ty_closure, closure_i
 	return
 
 #deffunc negi_lang_eval_local_var int cmd_i, \
@@ -2167,7 +2201,7 @@
 #deffunc negi_lang_eval_call int cmd_i, \
 	local len, local call_tok_i, local i, \
 	local fun_ty, local fun_val, local arg_tys, local arg_vals, \
-	local body_label_i, local array_val, local env_i
+	local fun_i, local closure_i, local body_label_i, local array_val, local parent_env_i, local env_i
 
 	assert g_cmd_kinds(cmd_i) == cmd_call
 	len = g_cmd_xs(cmd_i)
@@ -2181,18 +2215,23 @@
 	loop
 	negi_lang_stack_pop fun_ty, fun_val
 
-	if fun_ty != ty_fun {
+	if fun_ty != ty_fun && fun_ty != ty_closure {
 		negi_lang_eval_abort "type error", call_tok_i
 		return
 	}
 
-	// closure
-	if g_fun_kinds(fun_val) == fun_kind_closure {
-		body_label_i = g_fun_label_is(fun_val)
+	// クロージャを呼び出す。
+	if fun_ty == ty_closure {
+		closure_i = fun_val
+		fun_i = g_closure_fun_is(closure_i)
+		parent_env_i = g_closure_env_is(closure_i)
+		body_label_i = g_fun_label_is(fun_i)
 
-		env_i = negi_lang_env_add(g_env_i_global, fun_val)
+		assert g_fun_kinds(fun_i) == fun_kind_closure
 
-		// 実引数を配列に置く。
+		// 環境を生成して、実引数を割り当てる。
+		env_i = negi_lang_env_add(parent_env_i, fun_i)
+
 		array_val = g_env_array_is(env_i)
 		repeat len
 			if cnt >= len { break }
@@ -2371,8 +2410,8 @@
 			negi_lang_stack_push ty_fun, 0
 			continue
 		}
-		if g_cmd_kinds(cmd_i) == cmd_make_fun {
-			negi_lang_stack_push ty_fun, g_cmd_xs(cmd_i)
+		if g_cmd_kinds(cmd_i) == cmd_push_closure {
+			negi_lang_eval_push_closure cmd_i
 			continue
 		}
 		if g_cmd_kinds(cmd_i) == cmd_local_var {
