@@ -267,7 +267,7 @@
 // -----------------------------------------------
 
 #enum fun_kind_primitive
-#enum fun_kind_lambda
+#enum fun_kind_closure
 
 // ###############################################
 // 変数
@@ -1369,9 +1369,9 @@
 // 関数リスト
 // -----------------------------------------------
 
-#defcfunc negi_lang_fun_add_lambda int scope_i, int body_label_i
+#defcfunc negi_lang_fun_add_closure int scope_i, int body_label_i
 
-	g_fun_kinds(g_fun_count) = fun_kind_lambda
+	g_fun_kinds(g_fun_count) = fun_kind_closure
 	g_fun_names(g_fun_count) = "<anonymous: " + body_label_i + ">"
 	g_fun_scope_is(g_fun_count) = scope_i
 	g_fun_label_is(g_fun_count) = body_label_i
@@ -1741,7 +1741,7 @@
 	negi_lang_cmd_add cmd_return, tok_i
 
 	negi_lang_scope_pop
-	fun_i = negi_lang_fun_add_lambda(scope_i, body_label_i)
+	fun_i = negi_lang_fun_add_closure(scope_i, body_label_i)
 
 	// 関数を生成する。
 	negi_lang_cmd_add_int cmd_label, next_label_i, tok_i
@@ -2111,8 +2111,8 @@
 		return
 	}
 
-	// lambda
-	if g_fun_kinds(fun_val) == fun_kind_lambda {
+	// closure
+	if g_fun_kinds(fun_val) == fun_kind_closure {
 		scope_label_i = g_fun_scope_is(fun_val)
 		body_label_i = g_fun_label_is(fun_val)
 
