@@ -1,0 +1,98 @@
+
+#runtime "hsp3cl"
+
+#include "encode.as"
+
+#module m_bundler
+
+#const true 1
+#const false 0
+
+#define pragma_encoding_utf8 "-*- encoding: utf-8 -*-"
+
+#define ctype getpath_dir(%1) getpath(%1, 32)
+
+#define ctype path_join(%1, %2) (%1) + "/" + (%2)
+
+#deffunc bundler_initialize
+
+	sdim s_doc_paths
+	dim s_doc_dones
+	sdim s_doc_contents
+	s_doc_len = 0
+
+	dim s_doc_include_l
+	dim s_doc_include_r
+	dim s_doc_include_len
+	return
+
+#deffunc bundler_doc_add str path
+
+	s_doc_len++
+	s_doc_paths(s_doc_len - 1) = path
+	s_doc_dones(s_doc_len - 1) = false
+	s_doc_contents(s_doc_len - 1) = ""
+	return
+
+#deffunc bundler_search int doc_i
+
+	if s_doc_dones(doc_i) {
+		return
+	}
+
+	exist s_doc_paths(doc_i)
+	
+
+	return
+
+#deffunc main \
+	local current_dir, local src_dir, local root_file_path, \
+	local file_name, local file_path, \
+	local content, local offset, local l, local r
+
+	current_dir = dir_cur
+
+	src_dir = current_dir + "/../src"
+
+	chdir src_dir
+
+	// Open the root file.
+	root_file_path = src_dir + "/negi_lang.hsp"
+	notesel content
+	noteload root_file_path
+	noteunsel
+
+	content = utf8n2sjis@(content)
+	mes content
+
+	// File includes.
+	dim s_include_ls
+	dim s_include_rs
+	s_include_len = 0
+
+	l = 0
+	repeat
+		offset = instr(content, l, "#include \"")
+		mes offset
+		if offset < 0 { break }
+		l += offset + strlen("#include \"")
+		
+		offset = instr(content, l, "\"")
+		mes offset
+		if offset < 0 { break }
+		r = l + offset
+
+		s_include_len++
+		s_include_ls(s_include_len - 1) = l
+		s_include_rs(s_include_len - 1) = r
+
+		file_path = src_dir + "/" + strmid(content, l, r - l)
+		mes file_path
+	loop
+
+	chdir current_dir
+	return
+
+#global
+
+	main
