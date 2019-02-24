@@ -318,11 +318,11 @@
 
 // モジュールの中にある、ローカル変数ではない変数の名前には s_ をつける。
 
-// 配列は nani_fields と nani_count の組み合わせで管理する。
+// 配列は nani_fields と nani_len の組み合わせで管理する。
 // 例えば文字列の配列で、各文字列の長さを変数に記録しておくときは、
 //   strs: 文字列からなる配列
 //   str_lengths: 文字列の長さからなる配列
-//   str_count: 文字列リストの要素数
+//   str_len: 文字列リストの要素数
 // という3つの変数を使う。(strs(i) と str_length(i) が対応する。)
 // これは構造体の配列の代わりになる。
 
@@ -339,7 +339,7 @@
 	dim s_tok_kinds
 	dim s_tok_src_ls
 	dim s_tok_src_rs
-	s_tok_count = 0
+	s_tok_len = 0
 
 	// 式のリスト
 	// kind: 種類
@@ -356,12 +356,12 @@
 	dim s_exp_ints
 	sdim s_exp_strs
 	dim s_exp_tok_is
-	s_exp_count = 0
+	s_exp_len = 0
 
 	// 部分式のリスト
 	// exp_l, exp_r: 式の範囲
 	dim s_subexp_exp_is
-	s_subexp_count = 0
+	s_subexp_len = 0
 
 	// プログラム全体からなる式の式番号
 	s_exp_i_root = exp_i_none
@@ -369,7 +369,7 @@
 	// ラベルのリスト
 	// cmd_i: ラベルが指す命令列上の位置
 	dim s_label_cmd_is
-	s_label_count = 0
+	s_label_len = 0
 
 	// スコープスタック
 	// parent: 親スコープのスコープ番号 (トップレベルなら 0)
@@ -377,7 +377,7 @@
 	dim s_scope_parents
 	dim s_scope_lens
 	dim s_scope_tok_is
-	s_scope_count = 1
+	s_scope_len = 1
 	s_scope_current = scope_i_global
 
 	s_scope_parents(scope_i_global) = -1
@@ -390,13 +390,13 @@
 	dim s_local_scope_is
 	dim s_local_indexes
 	dim s_local_tok_is
-	s_local_count = 0
+	s_local_len = 0
 
 	// ループスタック
 	// break/continue のジャンプ先を決定するために使う。
 	// break: break のジャンプ先のラベル番号
 	dim s_loop_breaks
-	dim s_loop_count
+	dim s_loop_len
 
 	// 関数のリスト
 	// kind: 関数の種類
@@ -407,7 +407,7 @@
 	sdim s_fun_names
 	dim s_fun_scope_is
 	dim s_fun_label_is
-	s_fun_count = 1
+	s_fun_len = 1
 
 	// 命令列
 	// kind: 命令の種類
@@ -419,18 +419,18 @@
 	dim s_cmd_ys
 	sdim s_cmd_strs
 	dim s_cmd_tok_is
-	s_cmd_count = 0
+	s_cmd_len = 0
 
 	// セルリスト (オブジェクトを配置する領域。メモリ空間のようなもの。)
 	// ty, val: セルの型タグと値
 	// stack_ptr: いまのスタックの末尾
 	// stack_ptr_max: スタック全体の末尾 (= ヒープの先頭)
 	// heap_ptr: いまのヒープの末尾
-	s_cell_count = 1024 * 1024 / 4 // 1MB
-	dim s_cell_tys, s_cell_count
-	dim s_cell_vals, s_cell_count
+	s_cell_len = 1024 * 1024 / 4 // 1MB
+	dim s_cell_tys, s_cell_len
+	dim s_cell_vals, s_cell_len
 	s_cell_i_stack_end = 0
-	s_cell_i_stack_max = s_cell_count / 4
+	s_cell_i_stack_max = s_cell_len / 4
 	s_cell_i_heap_end = s_cell_i_stack_max
 
 	// フレーム (関数呼び出しのメタ情報)
@@ -440,11 +440,11 @@
 	dim s_frame_cmd_is
 	dim s_frame_env_is
 	dim s_frame_tok_is
-	s_frame_count = 0
+	s_frame_len = 0
 
 	// 評価中に生成された文字列のリスト
 	sdim s_strs, 16, 1024
-	s_str_count = 0
+	s_str_len = 0
 
 	// 評価中に生成された配列のリスト
 	// len: 配列の現在の長さ
@@ -452,7 +452,7 @@
 	dim s_array_lens, 1024
 	dim s_array_cell_ls, 1024
 	dim s_array_cell_rs, 1024
-	s_array_count = 0
+	s_array_len = 0
 
 	// 評価中に生成された環境のリスト
 	// parent: この環境の親となる環境番号 (なければ 0)
@@ -461,7 +461,7 @@
 	dim s_env_parents
 	dim s_env_scope_is
 	dim s_env_array_is
-	s_env_count = 0
+	s_env_len = 0
 
 	// グローバル環境
 	s_env_i_global = -1
@@ -471,7 +471,7 @@
 	// env_i: このクロージャが生成された環境番号
 	dim s_closure_fun_is
 	dim s_closure_env_is
-	s_closure_count = 0
+	s_closure_len = 0
 
 	// プログラムカウンタ (次に実行するコマンド番号)
 	s_pc = 0
@@ -484,7 +484,7 @@
 	sdim s_err_messages
 	dim s_err_src_ls
 	dim s_err_src_rs
-	s_err_count = 0
+	s_err_len = 0
 	return
 
 // ###############################################
@@ -514,7 +514,7 @@
 	local text, local msg
 
 	buf = ""
-	repeat s_err_count
+	repeat s_err_len
 		l = s_err_src_ls(cnt)
 		r = s_err_src_rs(cnt)
 		negi_lang_find_pos l, ly, lx
@@ -532,10 +532,10 @@
 
 	d_trace "err: " + message + ", text = " + strmid(s_src, src_l, src_r - src_l)
 
-	s_err_messages(s_err_count) = message
-	s_err_src_ls(s_err_count) = src_l
-	s_err_src_rs(s_err_count) = src_r
- 	s_err_count++
+	s_err_messages(s_err_len) = message
+	s_err_src_ls(s_err_len) = src_l
+	s_err_src_rs(s_err_len) = src_r
+ 	s_err_len++
 	return
 
 // ###############################################
@@ -578,15 +578,15 @@
 	// tok_eof 以外のトークンの長さはゼロでない。さもないと無限ループになるおそれがある。
 	assert kind == tok_eof || src_l < src_r
 
- 	s_tok_kinds(s_tok_count) = kind
-	s_tok_src_ls(s_tok_count) = src_l
-	s_tok_src_rs(s_tok_count) = src_r
-	s_tok_count++
+ 	s_tok_kinds(s_tok_len) = kind
+	s_tok_src_ls(s_tok_len) = src_l
+	s_tok_src_rs(s_tok_len) = src_r
+	s_tok_len++
 	return
 
 // tok_i 番目のトークンを構成する文字列を取得する。
 #defcfunc negi_lang_tok_text int tok_i
-	assert tok_i < s_tok_count
+	assert tok_i < s_tok_len
 	return strmid(s_src, s_tok_src_ls(tok_i), s_tok_src_rs(tok_i) - s_tok_src_ls(tok_i))
 
 #defcfunc negi_lang_tok_detect_kind str text
@@ -607,7 +607,7 @@
 #deffunc negi_lang_tokenize \
 	local c, local l, local r, local kind, local text
 
-	assert s_tok_count == 0 // 変数が初期化済みであることを確認する。
+	assert s_tok_len == 0 // 変数が初期化済みであることを確認する。
 
 	repeat
 		// 1回のループで、位置 l から始まる1つのトークンを切り出す。
@@ -743,81 +743,81 @@
 
 // 式を追加して、その式番号を返す。
 #deffunc negi_lang_exp_add int kind, int tok_i
-	s_exp_kinds(s_exp_count) = kind
-	s_exp_exp_ls(s_exp_count) = exp_i_none
-	s_exp_exp_rs(s_exp_count) = exp_i_none
-	s_exp_exp_conds(s_exp_count) = exp_i_none
-	s_exp_subexp_ls(s_exp_count) = 0
-	s_exp_subexp_rs(s_exp_count) = 0
-	s_exp_ints(s_exp_count) = 0
-	s_exp_strs(s_exp_count) = ""
-	s_exp_tok_is(s_exp_count) = tok_i
-	s_exp_count++
+	s_exp_kinds(s_exp_len) = kind
+	s_exp_exp_ls(s_exp_len) = exp_i_none
+	s_exp_exp_rs(s_exp_len) = exp_i_none
+	s_exp_exp_conds(s_exp_len) = exp_i_none
+	s_exp_subexp_ls(s_exp_len) = 0
+	s_exp_subexp_rs(s_exp_len) = 0
+	s_exp_ints(s_exp_len) = 0
+	s_exp_strs(s_exp_len) = ""
+	s_exp_tok_is(s_exp_len) = tok_i
+	s_exp_len++
 	return
 
 // 整数値をパラメーターに持つ式を追加する。
 #defcfunc negi_lang_exp_add_int int kind, int value, int tok_i
 
 	negi_lang_exp_add kind, tok_i
-	s_exp_ints(s_exp_count - 1) = value
-	return s_exp_count - 1
+	s_exp_ints(s_exp_len - 1) = value
+	return s_exp_len - 1
 
 // 文字列をパラメーターに持つ式を追加する。
 #defcfunc negi_lang_exp_add_str int kind, str value, int tok_i
 
 	negi_lang_exp_add kind, tok_i
-	s_exp_strs(s_exp_count - 1) = value
-	return s_exp_count - 1
+	s_exp_strs(s_exp_len - 1) = value
+	return s_exp_len - 1
 
 // エラーを表す式を追加する。
 #defcfunc negi_lang_exp_add_err str message, int tok_i
 
 	negi_lang_exp_add exp_err, tok_i
-	s_exp_strs(s_exp_count - 1) = message
-	return s_exp_count - 1
+	s_exp_strs(s_exp_len - 1) = message
+	return s_exp_len - 1
 
 // 2項演算を表す式を追加する。
 // exp_l, exp_r: 左辺と右辺の式番号
 #defcfunc negi_lang_exp_add_bin int op, int exp_l, int exp_r, int tok_i
 
 	negi_lang_exp_add exp_op, tok_i
-	s_exp_ints(s_exp_count - 1) = op
-	s_exp_exp_ls(s_exp_count - 1) = exp_l
-	s_exp_exp_rs(s_exp_count - 1) = exp_r
-	return s_exp_count - 1
+	s_exp_ints(s_exp_len - 1) = op
+	s_exp_exp_ls(s_exp_len - 1) = exp_l
+	s_exp_exp_rs(s_exp_len - 1) = exp_r
+	return s_exp_len - 1
 
-#defcfunc negi_lang_exp_add_subexps int kind, array exp_is, int subexp_count, int tok_i, \
+#defcfunc negi_lang_exp_add_subexps int kind, array exp_is, int subexp_len, int tok_i, \
 	local subexp_l, local subexp_r
 
-	negi_lang_subexp_add exp_is, subexp_count, subexp_l, subexp_r
+	negi_lang_subexp_add exp_is, subexp_len, subexp_l, subexp_r
 
 	negi_lang_exp_add kind, tok_i
-	s_exp_subexp_ls(s_exp_count - 1) = subexp_l
-	s_exp_subexp_rs(s_exp_count - 1) = subexp_r
-	return s_exp_count - 1
+	s_exp_subexp_ls(s_exp_len - 1) = subexp_l
+	s_exp_subexp_rs(s_exp_len - 1) = subexp_r
+	return s_exp_len - 1
 
 #defcfunc negi_lang_exp_add_if int cond_exp_i, int then_exp_i, int else_exp_i, int tok_i
 
 	negi_lang_exp_add exp_if, tok_i
-	s_exp_exp_conds(s_exp_count - 1) = cond_exp_i
-	s_exp_exp_ls(s_exp_count - 1) = then_exp_i
-	s_exp_exp_rs(s_exp_count - 1) = else_exp_i
-	return s_exp_count - 1
+	s_exp_exp_conds(s_exp_len - 1) = cond_exp_i
+	s_exp_exp_ls(s_exp_len - 1) = then_exp_i
+	s_exp_exp_rs(s_exp_len - 1) = else_exp_i
+	return s_exp_len - 1
 
 // let 式を追加する。
 #defcfunc negi_lang_exp_add_let int ident_tok_i, int init_exp_i, int tok_i
 
 	negi_lang_exp_add exp_let, tok_i
-	s_exp_ints(s_exp_count - 1) = ident_tok_i
-	s_exp_exp_rs(s_exp_count - 1) = init_exp_i
-	return s_exp_count - 1
+	s_exp_ints(s_exp_len - 1) = ident_tok_i
+	s_exp_exp_rs(s_exp_len - 1) = init_exp_i
+	return s_exp_len - 1
 
 #defcfunc negi_lang_exp_add_while int cond_exp_i, int body_exp_i, int tok_i
 
 	negi_lang_exp_add exp_while, tok_i
-	s_exp_exp_conds(s_exp_count - 1) = cond_exp_i
-	s_exp_exp_ls(s_exp_count - 1) = body_exp_i
-	return s_exp_count - 1
+	s_exp_exp_conds(s_exp_len - 1) = cond_exp_i
+	s_exp_exp_ls(s_exp_len - 1) = body_exp_i
+	return s_exp_len - 1
 
 // -----------------------------------------------
 // 部分式リスト
@@ -826,9 +826,9 @@
 #deffunc negi_lang_subexp_add array exp_is, int len, var out_subexp_l, var out_subexp_r, \
 	local i
 
-	out_subexp_l = s_subexp_count
-	out_subexp_r = s_subexp_count + len
-	s_subexp_count += len
+	out_subexp_l = s_subexp_len
+	out_subexp_r = s_subexp_len + len
+	s_subexp_len += len
 
 	repeat len
 		i = len - 1 - cnt
@@ -861,7 +861,7 @@
 	return exp_i
 
 // カンマで区切られた term の並びをパースする。
-#deffunc negi_lang_parse_list var tok_i, int bracket_tok_i, array out_exp_is, var out_subexp_count, \
+#deffunc negi_lang_parse_list var tok_i, int bracket_tok_i, array out_exp_is, var out_subexp_len, \
 	local exp_i, local len, local kind, local item_tok_i
 
 	len = 0
@@ -882,17 +882,17 @@
 		tok_i++
 	loop
 
-	out_subexp_count = len
+	out_subexp_len = len
 	return
 
 #defcfunc negi_lang_parse_array var tok_i, \
-	local exp_is, local subexp_count, local bracket_tok_i, local exp_i
+	local exp_is, local subexp_len, local bracket_tok_i, local exp_i
 
 	bracket_tok_i = tok_i
 	tok_i++
 
-	negi_lang_parse_list tok_i, bracket_tok_i, exp_is, subexp_count
-	exp_i = negi_lang_exp_add_subexps(exp_array, exp_is, subexp_count, bracket_tok_i)
+	negi_lang_parse_list tok_i, bracket_tok_i, exp_is, subexp_len
+	exp_i = negi_lang_exp_add_subexps(exp_array, exp_is, subexp_len, bracket_tok_i)
 
 	if s_tok_kinds(tok_i) != tok_bracket_r {
 		return negi_lang_exp_add_err("角カッコが閉じられていません。", bracket_tok_i)
@@ -978,7 +978,7 @@
 	return negi_lang_exp_add_int(exp_break, 0, break_tok_i)
 
 #defcfunc negi_lang_parse_fun var tok_i, \
-	local fun_tok_i, local paren_tok_i, local exp_is, local subexp_count, \
+	local fun_tok_i, local paren_tok_i, local exp_is, local subexp_len, \
 	local body_exp_i, local fun_exp_i
 
 	assert s_tok_kinds(tok_i) == tok_fun
@@ -991,7 +991,7 @@
 	paren_tok_i = tok_i
 	tok_i++
 
-	negi_lang_parse_list tok_i, paren_tok_i, exp_is, subexp_count
+	negi_lang_parse_list tok_i, paren_tok_i, exp_is, subexp_len
 
 	if s_tok_kinds(tok_i) != tok_paren_r {
 		return negi_lang_exp_add_err("丸カッコが閉じられていません。", paren_tok_i)
@@ -1004,7 +1004,7 @@
 		body_exp_i = negi_lang_parse_term(tok_i)
 	}
 
-	fun_exp_i = negi_lang_exp_add_subexps(exp_fun, exp_is, subexp_count, fun_tok_i)
+	fun_exp_i = negi_lang_exp_add_subexps(exp_fun, exp_is, subexp_len, fun_tok_i)
 	s_exp_exp_ls(fun_exp_i) = body_exp_i
 
 	return fun_exp_i
@@ -1067,7 +1067,7 @@
 // ここでは `x[i]` のように式の後ろにつく種類の式を後置式を呼んでいる。
 #defcfunc negi_lang_parse_suffix var tok_i, \
 	local exp_l, local exp_r, local op_tok_i, \
-	local exp_is, local subexp_count
+	local exp_is, local subexp_len
 
 	exp_l = negi_lang_parse_atom(tok_i)
 
@@ -1092,7 +1092,7 @@
 			op_tok_i = tok_i
 			tok_i++
 
-			negi_lang_parse_list tok_i, op_tok_i, exp_is, subexp_count
+			negi_lang_parse_list tok_i, op_tok_i, exp_is, subexp_len
 
 			if s_tok_kinds(tok_i) != tok_paren_r {
 				exp_l = negi_lang_exp_add_err("丸カッコが閉じられていません。", op_tok_i)
@@ -1101,7 +1101,7 @@
 			tok_i++
 
 			exp_r = exp_l
-			exp_l = negi_lang_exp_add_subexps(exp_call, exp_is, subexp_count, op_tok_i)
+			exp_l = negi_lang_exp_add_subexps(exp_call, exp_is, subexp_len, op_tok_i)
 			s_exp_exp_ls(exp_l) = exp_r
 			continue
 		}
@@ -1350,7 +1350,7 @@
 #deffunc negi_lang_parse \
 	local exp_i, local tok_i
 
-	assert s_exp_count == 0
+	assert s_exp_len == 0
 
 	// 特定の式を登録する。
 	exp_i = negi_lang_exp_add_err("NOT AN EXPRESSION", 0)
@@ -1379,9 +1379,9 @@
 
 #defcfunc negi_lang_label_add
 
-	s_label_cmd_is(s_label_count) = -1
-	s_label_count++
-	return s_label_count - 1
+	s_label_cmd_is(s_label_len) = -1
+	s_label_len++
+	return s_label_len - 1
 
 #deffunc negi_lang_label_set int label_i, int cmd_i
 
@@ -1394,12 +1394,12 @@
 
 #deffunc negi_lang_scope_push int tok_i
 
-	s_scope_parents(s_scope_count) = s_scope_current
-	s_scope_lens(s_scope_count) = 0
-	s_scope_tok_is(s_scope_count) = tok_i
-	s_scope_count++
+	s_scope_parents(s_scope_len) = s_scope_current
+	s_scope_lens(s_scope_len) = 0
+	s_scope_tok_is(s_scope_len) = tok_i
+	s_scope_len++
 
-	s_scope_current = s_scope_count - 1
+	s_scope_current = s_scope_len - 1
 	return
 
 #deffunc negi_lang_scope_pop
@@ -1412,11 +1412,11 @@
 
 	s_scope_lens(s_scope_current)++
 
-	s_local_scope_is(s_local_count) = s_scope_current
-	s_local_indexes(s_local_count) = s_scope_lens(s_scope_current) - 1
-	s_local_idents(s_local_count) = ident
-	s_local_tok_is(s_local_count) = tok_i
-	s_local_count++
+	s_local_scope_is(s_local_len) = s_scope_current
+	s_local_indexes(s_local_len) = s_scope_lens(s_scope_current) - 1
+	s_local_idents(s_local_len) = ident
+	s_local_tok_is(s_local_len) = tok_i
+	s_local_len++
 	return
 
 #deffunc negi_lang_local_find_var str ident, var out_index, \
@@ -1425,7 +1425,7 @@
 	out_index = -1
 	scope_i = s_scope_current
 	repeat
-		repeat s_local_count
+		repeat s_local_len
 			if s_local_scope_is(cnt) != scope_i { continue }
 			if s_local_idents(cnt) != ident { continue }
 			out_index = cnt
@@ -1444,12 +1444,12 @@
 
 #defcfunc negi_lang_fun_add_closure int scope_i, int body_label_i
 
-	s_fun_kinds(s_fun_count) = fun_kind_closure
-	s_fun_names(s_fun_count) = "<anonymous: " + body_label_i + ">"
-	s_fun_scope_is(s_fun_count) = scope_i
-	s_fun_label_is(s_fun_count) = body_label_i
-	s_fun_count++
-	return s_fun_count - 1
+	s_fun_kinds(s_fun_len) = fun_kind_closure
+	s_fun_names(s_fun_len) = "<anonymous: " + body_label_i + ">"
+	s_fun_scope_is(s_fun_len) = scope_i
+	s_fun_label_is(s_fun_len) = body_label_i
+	s_fun_len++
+	return s_fun_len - 1
 
 // -----------------------------------------------
 // ループスタック
@@ -1457,14 +1457,14 @@
 
 #deffunc negi_lang_loop_push int break_label_i
 
-	s_loop_breaks(s_loop_count) = break_label_i
-	s_loop_count++
+	s_loop_breaks(s_loop_len) = break_label_i
+	s_loop_len++
 	return
 
 #deffunc negi_lang_loop_pop
 
-	assert s_loop_count >= 1
-	s_loop_count--
+	assert s_loop_len >= 1
+	s_loop_len--
 	return
 
 // -----------------------------------------------
@@ -1475,39 +1475,39 @@
 // tok_i: この命令と関連するトークン番号
 #deffunc negi_lang_cmd_add int kind, int tok_i
 
-	s_cmd_kinds(s_cmd_count) = kind
-	s_cmd_xs(s_cmd_count) = 0
-	s_cmd_ys(s_cmd_count) = 0
-	s_cmd_strs(s_cmd_count) = ""
-	s_cmd_tok_is(s_cmd_count) = tok_i
-	s_cmd_count++
+	s_cmd_kinds(s_cmd_len) = kind
+	s_cmd_xs(s_cmd_len) = 0
+	s_cmd_ys(s_cmd_len) = 0
+	s_cmd_strs(s_cmd_len) = ""
+	s_cmd_tok_is(s_cmd_len) = tok_i
+	s_cmd_len++
 	return
 
 // エラーを報告する命令を追加する。
 #deffunc negi_lang_cmd_add_err str message, int tok_i
 
 	negi_lang_cmd_add cmd_err, tok_i
-	s_cmd_strs(s_cmd_count - 1) = message
+	s_cmd_strs(s_cmd_len - 1) = message
 	return
 
 // 整数値を引数に持つ命令を追加する。
 #deffunc negi_lang_cmd_add_int int kind, int value, int tok_i
 
 	negi_lang_cmd_add kind, tok_i
-	s_cmd_xs(s_cmd_count - 1) = value
+	s_cmd_xs(s_cmd_len - 1) = value
 	return
 
 // 文字列を引数に持つ命令を追加する。
 #deffunc negi_lang_cmd_add_str int kind, str value, int tok_i
 
 	negi_lang_cmd_add kind, tok_i
-	s_cmd_strs(s_cmd_count - 1) = value
+	s_cmd_strs(s_cmd_len - 1) = value
 	return
 
 #deffunc negi_lang_cmd_add_local_var int index, int scope_i, int tok_i
 
 	negi_lang_cmd_add_int cmd_local_var, index, tok_i
-	s_cmd_ys(s_cmd_count - 1) = scope_i
+	s_cmd_ys(s_cmd_len - 1) = scope_i
 	return
 
 // 否定演算の命令を追加する。 (!x ---> x == false)
@@ -1660,11 +1660,11 @@
 	assert s_exp_kinds(exp_i) == exp_break
 	tok_i = s_exp_tok_is(exp_i)
 
-	if s_loop_count == 0 {
+	if s_loop_len == 0 {
 		negi_lang_cmd_add_err "ループの外側では break を使用できません。", tok_i
 		return
 	}
-	break_label_i = s_loop_breaks(s_loop_count - 1)
+	break_label_i = s_loop_breaks(s_loop_len - 1)
 
 	negi_lang_cmd_add_goto break_label_i, tok_i
 	return
@@ -1778,7 +1778,7 @@
 	negi_lang_gen_exp s_exp_exp_rs(exp_i)
 
 	negi_lang_local_add_var ident, ident_tok_i
-	index = s_local_indexes(s_local_count - 1)
+	index = s_local_indexes(s_local_len - 1)
 
 	negi_lang_cmd_add_int cmd_local_var, index, s_exp_tok_is(exp_i)
 	negi_lang_cmd_add cmd_swap, s_exp_tok_is(exp_i)
@@ -1938,13 +1938,13 @@
 	negi_lang_gen_exp s_exp_i_root
 
 	// スタックにある値を終了コードとして終了する命令を末尾に追加する。
-	negi_lang_cmd_add cmd_exit, s_tok_count - 1
+	negi_lang_cmd_add cmd_exit, s_tok_len - 1
 
 	// トップレベルに対応する関数を登録する。
 	s_fun_i_main = negi_lang_fun_add_closure(scope_i_global, main_label_i)
 
 	// ラベルを解決する。
-	repeat s_cmd_count
+	repeat s_cmd_len
 		if s_cmd_kinds(cnt) == cmd_label {
 			negi_lang_label_set s_cmd_xs(cnt), cnt
 		}
@@ -1994,7 +1994,7 @@
 
 #deffunc negi_lang_heap_alloc int count, var out_cell_l, var out_cell_r
 
-	if s_cell_i_heap_end + count > s_cell_count {
+	if s_cell_i_heap_end + count > s_cell_len {
 		// FIXME: ヒープを自動で拡張する
 		negi_lang_eval_abort "OUT OF MEMORY", 0
 		return
@@ -2011,17 +2011,17 @@
 
 #deffunc negi_lang_frame_push int cmd_i, int env_i, int tok_i
 
-	s_frame_cmd_is(s_frame_count) = cmd_i
-	s_frame_env_is(s_frame_count) = env_i
-	s_frame_tok_is(s_frame_count) = tok_i
-	s_frame_count++
+	s_frame_cmd_is(s_frame_len) = cmd_i
+	s_frame_env_is(s_frame_len) = env_i
+	s_frame_tok_is(s_frame_len) = tok_i
+	s_frame_len++
 	return
 
 #defcfunc negi_lang_frame_pop
 
-	assert s_frame_count >= 1
-	s_frame_count--
-	return s_frame_cmd_is(s_frame_count)
+	assert s_frame_len >= 1
+	s_frame_len--
+	return s_frame_cmd_is(s_frame_len)
 
 // -----------------------------------------------
 // 文字列リスト
@@ -2030,9 +2030,9 @@
 // 文字列リストに追加して、その番号を返す。
 #defcfunc negi_lang_str_add str value
 
-	s_strs(s_str_count) = value
-	s_str_count++
-	return s_str_count - 1
+	s_strs(s_str_len) = value
+	s_str_len++
+	return s_str_len - 1
 
 // -----------------------------------------------
 // 配列リスト
@@ -2047,11 +2047,11 @@
 
 	negi_lang_heap_alloc capacity, cell_l, cell_r
 
-	s_array_lens(s_array_count) = len
-	s_array_cell_ls(s_array_count) = cell_l
-	s_array_cell_rs(s_array_count) = cell_r
-	s_array_count++
-	return s_array_count - 1
+	s_array_lens(s_array_len) = len
+	s_array_cell_ls(s_array_len) = cell_l
+	s_array_cell_rs(s_array_len) = cell_r
+	s_array_len++
+	return s_array_len - 1
 
 // 配列のキャパシティを new_len 以上にする。
 // 現在のキャパシティでは足りなければ、新しい領域を確保して移動する。
@@ -2099,7 +2099,7 @@
 #defcfunc negi_lang_array_ref int array_ty, int array_i, int index
 
 	assert array_ty == ty_array
-	assert 0 <= array_i && array_i < s_array_count
+	assert 0 <= array_i && array_i < s_array_len
 
 	if (0 <= index && index < s_array_lens(array_i)) == false {
 		negi_lang_eval_abort "配列の要素番号が不正です。", 0 // FIXME: 位置情報
@@ -2139,18 +2139,18 @@
 	array_len = s_scope_lens(scope_i)
 	array_i = negi_lang_array_add(array_len, array_len)
 
-	s_env_parents(s_env_count) = parent_env_i
-	s_env_scope_is(s_env_count) = scope_i
-	s_env_array_is(s_env_count) = array_i
-	s_env_count++
-	return s_env_count - 1
+	s_env_parents(s_env_len) = parent_env_i
+	s_env_scope_is(s_env_len) = scope_i
+	s_env_array_is(s_env_len) = array_i
+	s_env_len++
+	return s_env_len - 1
 
 #defcfunc negi_lang_env_ref int source_env_i, int index, int scope_i, \
 	local array_i, local env_i
 
 	env_i = source_env_i
 	repeat
-		assert 0 <= env_i && env_i < s_env_count
+		assert 0 <= env_i && env_i < s_env_len
 		if s_env_scope_is(env_i) == scope_i { break }
 
 		assert env_i != s_env_parents(env_i)
@@ -2168,10 +2168,10 @@
 
 	assert s_fun_kinds(fun_i) == fun_kind_closure
 
-	s_closure_fun_is(s_closure_count) = fun_i
-	s_closure_env_is(s_closure_count) = env_i
-	s_closure_count++
-	return s_closure_count - 1
+	s_closure_fun_is(s_closure_len) = fun_i
+	s_closure_env_is(s_closure_len) = env_i
+	s_closure_len++
+	return s_closure_len - 1
 
 // -----------------------------------------------
 // 評価
@@ -2184,7 +2184,7 @@
 
 	// 終了コード 1 で停止させる。
 	negi_lang_stack_push ty_int, 1
-	s_pc = s_cmd_count - 1
+	s_pc = s_cmd_len - 1
 	assert s_cmd_kinds(s_pc) == cmd_exit
 	return
 
@@ -2209,7 +2209,7 @@
 	local fun_i, local env_i, local closure_i
 
 	fun_i = s_cmd_xs(cmd_i)
-	env_i = s_frame_env_is(s_frame_count - 1)
+	env_i = s_frame_env_is(s_frame_len - 1)
 	closure_i = negi_lang_closure_add(fun_i, env_i)
 
 	negi_lang_stack_push ty_closure, closure_i
@@ -2222,7 +2222,7 @@
 	index = s_cmd_xs(cmd_i)
 	scope_i = s_cmd_ys(cmd_i)
 
-	env_i = s_frame_env_is(s_frame_count - 1)
+	env_i = s_frame_env_is(s_frame_len - 1)
 
 	negi_lang_stack_push ty_cell, negi_lang_env_ref(env_i, index, scope_i)
 	return
@@ -2593,11 +2593,11 @@
 	return
 
 #deffunc negi_lang_eval \
-	local global_var_count, local array_i, local exit_cmd_i
+	local global_var_len, local array_i, local exit_cmd_i
 
-	assert s_cmd_count != 0
+	assert s_cmd_len != 0
 
-	exit_cmd_i = s_cmd_count - 1
+	exit_cmd_i = s_cmd_len - 1
 	assert s_cmd_kinds(exit_cmd_i) == cmd_exit
 
 	// グローバル環境を生成する。
