@@ -236,12 +236,12 @@
 // x: キャパシティ
 #enum cmd_push_array
 
-// 関数値をプッシュする
-#enum cmd_push_fun
-
 // クロージャを生成してプッシュする
 // x: 関数番号
 #enum cmd_push_closure
+
+// 外部関数をプッシュする
+#enum cmd_push_extern
 
 // ローカル変数の参照セルをプッシュ
 // x: 何番目の変数か
@@ -288,22 +288,28 @@
 // 配列。値は s_arrays の要素番号。
 #enum ty_array
 
-// 関数。値は s_funs の要素番号。
-#enum ty_fun
-
 // クロージャ。値は s_closures の要素番号。
 #enum ty_closure
 
+// 外部関数。値は s_extern_funs の要素番号。
+#enum ty_extern
+
 // 参照セル。値は s_cells の要素番号。
 #enum ty_cell
+
+#const global negi_lang_ty_int ty_int
+
+#const global negi_lang_ty_str ty_str
 
 // -----------------------------------------------
 // 関数の種類
 // -----------------------------------------------
 
-#enum fun_kind_primitive
-
+// クロージャ。fun 式によって生成されるオブジェクト。
 #enum fun_kind_closure
+
+// 外部関数。extern 宣言によって生成されるオブジェクト。
+#enum fun_kind_extern
 
 // ###############################################
 // 変数
@@ -409,6 +415,12 @@
 	dim s_fun_label_is
 	s_fun_len = 1
 
+	// 外部関数のリスト
+	// label: 関数が呼ばれたときに実行される HSP のラベル
+	dim s_extern_fun_names, 256
+	ldim s_extern_fun_labels, 256
+	s_extern_fun_len = 0
+
 	// 命令列
 	// kind: 命令の種類
 	// x, y: 命令がとる整数型の引数
@@ -473,6 +485,15 @@
 	dim s_closure_env_is
 	s_closure_len = 0
 
+	// 外部関数呼び出しのフレーム
+	// array_i: 引数リストである配列番号
+	// result: 結果を格納するセル番号
+	// err: エラーが発生したかどうかを表す
+	s_extern_frame_array_i = -1
+	s_extern_frame_result = -1
+	s_extern_frame_err = false
+	s_extern_frame_err_message = ""
+
 	// プログラムカウンタ (次に実行するコマンド番号)
 	s_pc = 0
 
@@ -485,6 +506,8 @@
 	dim s_err_src_ls
 	dim s_err_src_rs
 	s_err_len = 0
+
+	negi_lang_extern_fun_initialize
 	return
 
 // ###############################################
@@ -536,6 +559,94 @@
 	s_err_src_ls(s_err_len) = src_l
 	s_err_src_rs(s_err_len) = src_r
  	s_err_len++
+	return
+
+// ###############################################
+// 外部関数
+// ###############################################
+
+// -----------------------------------------------
+// 外部関数リスト
+// -----------------------------------------------
+
+#deffunc negi_lang_extern_fun_add str name, label label
+
+	s_extern_fun_names(s_extern_fun_len) = name
+	s_extern_fun_labels(s_extern_fun_len) = label
+	s_extern_fun_len++
+	return
+
+#defcfunc negi_lang_extern_fun_find str name, \
+	local extern_fun_i
+
+	extern_fun_i = -1
+	repeat s_extern_fun_len
+		if s_extern_fun_names(cnt) == name {
+			extern_fun_i = cnt
+		}
+	loop
+	return extern_fun_i
+
+// -----------------------------------------------
+// 外部関数フレーム
+// -----------------------------------------------
+
+#defcfunc negi_lang_extern_arg_len
+
+	if s_extern_frame_array_i < 0 {
+		return 0
+	}
+	return s_array_lens(s_extern_frame_array_i)
+
+#defcfunc negi_lang_extern_arg_ty int index, \
+	local cell_i
+
+	if (0 <= index && index < negi_lang_extern_arg_len()) == false {
+		return ty_int
+	}
+	cell_i = negi_lang_array_ref(ty_array, s_extern_frame_array_i, index)
+	return s_cell_tys(cell_i)
+
+#defcfunc negi_lang_extern_arg_int int index, \
+	local cell_i
+
+	if (0 <= index && index < negi_lang_extern_arg_len()) == false {
+		return 0
+	}
+	cell_i = negi_lang_array_ref(ty_array, s_extern_frame_array_i, index)
+	return s_cell_vals(cell_i)
+
+#defcfunc negi_lang_extern_arg_str int index, \
+	local cell_i
+
+	if (0 <= index && index < negi_lang_extern_arg_len()) == false {
+		return 0
+	}
+	cell_i = negi_lang_array_ref(ty_array, s_extern_frame_array_i, index)
+	return s_strs(s_cell_vals(cell_i))
+
+// 組み込み関数専用。
+#deffunc negi_lang_extern_result_any int ty, int val
+
+	if s_extern_frame_result < 0 { return }
+	s_cell_tys(s_extern_frame_result) = ty
+	s_cell_vals(s_extern_frame_result) = val
+	return
+
+#deffunc negi_lang_extern_result_int int val
+
+	negi_lang_extern_result_any ty_int, val
+	return
+
+#deffunc negi_lang_extern_result_str var it
+
+	negi_lang_extern_result_any ty_str, negi_lang_str_add(it)
+	return
+
+#deffunc negi_lang_extern_result_err str message
+
+	s_extern_frame_err = true
+	s_extern_frame_err_message = message
 	return
 
 // ###############################################
@@ -1528,7 +1639,7 @@
 // -----------------------------------------------
 
 #deffunc negi_lang_gen_exp_ident int exp_i, int lval, \
-	local name, local tok_i, local local_i, local scope_i
+	local name, local tok_i, local local_i, local scope_i, local extern_fun_i
 
 	assert s_exp_kinds(exp_i) == exp_ident
 	name = s_exp_strs(exp_i)
@@ -1544,13 +1655,12 @@
 		return
 	}
 
-	if name == "array_len" && lval == false {
-		negi_lang_cmd_add_int cmd_push_fun, 0, tok_i
-		return
-	}
-	if name == "array_push" && lval == false {
-		negi_lang_cmd_add_int cmd_push_fun, 1, tok_i
-		return
+	if lval == false {
+		extern_fun_i = negi_lang_extern_fun_find(name)
+		if extern_fun_i >= 0 {
+			negi_lang_cmd_add_int cmd_push_extern, extern_fun_i, tok_i
+			return
+		}
 	}
 
 	negi_lang_cmd_add_err "未定義の変数を使用しています。", s_exp_tok_is(exp_i)
@@ -2300,7 +2410,8 @@
 #deffunc negi_lang_eval_call int cmd_i, \
 	local len, local call_tok_i, local i, \
 	local fun_ty, local fun_val, local arg_tys, local arg_vals, \
-	local fun_i, local closure_i, local body_label_i, local array_i, local parent_env_i, local env_i
+	local fun_i, local closure_i, local body_label_i, local array_i, local parent_env_i, local env_i, \
+	local extern_fun_i, local result_cell_l, local result_cell_r
 
 	assert s_cmd_kinds(cmd_i) == cmd_call
 	len = s_cmd_xs(cmd_i)
@@ -2313,11 +2424,6 @@
 		negi_lang_stack_pop arg_tys(i), arg_vals(i)
 	loop
 	negi_lang_stack_pop fun_ty, fun_val
-
-	if fun_ty != ty_fun && fun_ty != ty_closure {
-		negi_lang_eval_abort "type error", call_tok_i
-		return
-	}
 
 	// クロージャを呼び出す。
 	if fun_ty == ty_closure {
@@ -2333,7 +2439,6 @@
 
 		array_i = s_env_array_is(env_i)
 		repeat len
-			if cnt >= len { break }
 			negi_lang_array_set ty_array, array_i, cnt, arg_tys(cnt), arg_vals(cnt)
 		loop
 
@@ -2342,28 +2447,35 @@
 		return
 	}
 
-	// fun_i_array_len
-	if fun_val == 0 {
-		if len != 1 {
-			negi_lang_eval_abort "array_len の引数は1個でなければいけません。", call_tok_i
-			return
+	// 外部関数を呼び出す。
+	if fun_ty == ty_extern {
+		extern_fun_i = fun_val
+
+		array_i = negi_lang_array_add(len, len)
+		negi_lang_heap_alloc 1, result_cell_l, result_cell_r
+
+		repeat len
+			negi_lang_array_set ty_array, array_i, cnt, arg_tys(cnt), arg_vals(cnt)
+		loop
+
+		s_extern_frame_err = false
+		s_extern_frame_array_i = array_i
+		s_extern_frame_result = result_cell_l
+
+		gosub s_extern_fun_labels(extern_fun_i)
+		if s_extern_frame_err != false {
+			negi_lang_eval_abort s_extern_frame_err_message, call_tok_i
+		} else {
+			negi_lang_stack_push s_cell_tys(s_extern_frame_result), s_cell_vals(s_extern_frame_result)
 		}
-		if arg_tys(0) != ty_array {
-			negi_lang_eval_abort "array_len の第1引数は配列でなければいけません。", call_tok_i
-			return
-		}
-		negi_lang_stack_push ty_int, s_array_lens(arg_vals(0))
+
+		s_extern_frame_err = false
+		s_extern_frame_array_i = -1
+		s_extern_frame_result = -1
 		return
 	}
-	if fun_val == 1 {
-		if len != 2 || arg_tys(0) != ty_array {
-			negi_lang_eval_abort "array_push error", call_tok_i
-			return
-		}
-		negi_lang_array_push arg_tys(0), arg_vals(0), arg_tys(1), arg_vals(1)
-		negi_lang_stack_push ty_array, arg_vals(0)
-		return
-	}
+
+	negi_lang_eval_abort "type error", call_tok_i
 	return
 
 #deffunc negi_lang_eval_return int cmd_i
@@ -2522,12 +2634,12 @@
 			negi_lang_eval_push_array cmd_i
 			continue
 		}
-		if s_cmd_kinds(cmd_i) == cmd_push_fun {
-			negi_lang_stack_push ty_fun, s_cmd_xs(cmd_i)
-			continue
-		}
 		if s_cmd_kinds(cmd_i) == cmd_push_closure {
 			negi_lang_eval_push_closure cmd_i
+			continue
+		}
+		if s_cmd_kinds(cmd_i) == cmd_push_extern {
+			negi_lang_stack_push ty_extern, s_cmd_xs(cmd_i)
 			continue
 		}
 		if s_cmd_kinds(cmd_i) == cmd_local_var {
@@ -2620,6 +2732,43 @@
 	negi_lang_gen
 	negi_lang_eval
 	out_exit_code = s_eval_exit
+	return
+
+// ###############################################
+// 組み込み関数
+// ###############################################
+
+#define x_args s_extern_frame_array_i
+
+#define x_argc s_array_lens(x_args)
+
+#define ctype x_arg_ty(%1) s_cell_tys(s_array_cell_ls(x_args) + (%1))
+
+#define ctype x_arg_val(%1) s_cell_vals(s_array_cell_ls(x_args) + (%1))
+
+#deffunc negi_lang_extern_fun_initialize
+
+	negi_lang_extern_fun_add "array_len", *l_array_len
+	negi_lang_extern_fun_add "array_push", *l_array_push
+	return
+
+*l_array_len
+
+	if x_argc != 1 || x_arg_ty(0) != ty_array {
+		negi_lang_extern_result_err "array_len error"
+		return
+	}
+	negi_lang_extern_result_any ty_int, s_array_lens(x_arg_val(0))
+	return
+
+*l_array_push
+
+	if x_argc != 2 || x_arg_ty(0) != ty_array {
+		negi_lang_extern_result_err "array_push error"
+		return
+	}
+	negi_lang_array_push x_arg_ty(0), x_arg_val(0), x_arg_ty(1), x_arg_val(1)
+	negi_lang_extern_result_any ty_array, x_arg_val(0)
 	return
 
 #global
