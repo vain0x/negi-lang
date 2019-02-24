@@ -332,182 +332,15 @@
 // という3つの変数を使う。(strs(i) と str_length(i) が対応する。)
 // これは構造体の配列の代わりになる。
 
-#deffunc negi_lang_begin str src
+// ###############################################
+// ソースコード
+// ###############################################
+
+#deffunc negi_lang_src_initialize var src
 
 	// 与えられたソースコード
 	s_src = src
 	s_src_len = strlen(src)
-
-	// トークンのリスト
-	// kind: 種類
-	// src_l: トークンを構成する文字列の開始の位置
-	// src_r: トークンを構成する文字列の終わりの位置
-	dim s_tok_kinds
-	dim s_tok_src_ls
-	dim s_tok_src_rs
-	s_tok_len = 0
-
-	// 式のリスト
-	// kind: 種類
-	// int: 式に関連する整数値
-	// exp_l, exp_r: 式の左辺と右辺を指す式番号
-	// exp_conds: if の条件の式番号
-	// tok_i: 式に関連するトークン番号
-	dim s_exp_kinds
-	dim s_exp_exp_conds
-	dim s_exp_exp_ls
-	dim s_exp_exp_rs
-	dim s_exp_subexp_ls
-	dim s_exp_subexp_rs
-	dim s_exp_ints
-	sdim s_exp_strs
-	dim s_exp_tok_is
-	s_exp_len = 0
-
-	// 部分式のリスト
-	// exp_l, exp_r: 式の範囲
-	dim s_subexp_exp_is
-	s_subexp_len = 0
-
-	// プログラム全体からなる式の式番号
-	s_exp_i_root = exp_i_none
-
-	// ラベルのリスト
-	// cmd_i: ラベルが指す命令列上の位置
-	dim s_label_cmd_is
-	s_label_len = 0
-
-	// スコープスタック
-	// parent: 親スコープのスコープ番号 (トップレベルなら 0)
-	// len: スコープに属する識別子の個数
-	dim s_scope_parents
-	dim s_scope_lens
-	dim s_scope_tok_is
-	s_scope_len = 1
-	s_scope_current = scope_i_global
-
-	s_scope_parents(scope_i_global) = -1
-
-	// ローカル識別子リスト
-	// scope_is: 識別子が属するスコープ番号
-	// indexes: 識別子がスコープにおいて何番目か
-	// tok_i: 識別子が定義される箇所のトークン番号
-	sdim s_local_idents
-	dim s_local_scope_is
-	dim s_local_indexes
-	dim s_local_tok_is
-	s_local_len = 0
-
-	// ループスタック
-	// break/continue のジャンプ先を決定するために使う。
-	// break: break のジャンプ先のラベル番号
-	dim s_loop_breaks
-	dim s_loop_len
-
-	// 関数のリスト
-	// kind: 関数の種類
-	// name: 関数の名前
-	// scope_i: 関数本体が属するスコープ (クロージャのみ)
-	// label_i: 関数本体のラベル番号 (クロージャのみ)
-	dim s_fun_kinds
-	sdim s_fun_names
-	dim s_fun_scope_is
-	dim s_fun_label_is
-	s_fun_len = 1
-
-	// 外部関数のリスト
-	// label: 関数が呼ばれたときに実行される HSP のラベル
-	dim s_extern_fun_names, 256
-	ldim s_extern_fun_labels, 256
-	s_extern_fun_len = 0
-
-	// 命令列
-	// kind: 命令の種類
-	// x, y: 命令がとる整数型の引数
-	// str: 命令がとる文字列型の引数
-	// tok_i: 命令に関連するトークン番号
-	dim s_cmd_kinds
-	dim s_cmd_xs
-	dim s_cmd_ys
-	sdim s_cmd_strs
-	dim s_cmd_tok_is
-	s_cmd_len = 0
-
-	// セルリスト (オブジェクトを配置する領域。メモリ空間のようなもの。)
-	// ty, val: セルの型タグと値
-	// stack_ptr: いまのスタックの末尾
-	// stack_ptr_max: スタック全体の末尾 (= ヒープの先頭)
-	// heap_ptr: いまのヒープの末尾
-	s_cell_len = 1024 * 1024 / 4 // 1MB
-	dim s_cell_tys, s_cell_len
-	dim s_cell_vals, s_cell_len
-	s_cell_i_stack_end = 0
-	s_cell_i_stack_max = s_cell_len / 4
-	s_cell_i_heap_end = s_cell_i_stack_max
-
-	// フレーム (関数呼び出しのメタ情報)
-	// cmd_i: return 直後に実行するコマンド番号
-	// env_i: 実行中の環境番号
-	// tok_i: フレームに関係のあるトークン番号
-	dim s_frame_cmd_is
-	dim s_frame_env_is
-	dim s_frame_tok_is
-	s_frame_len = 0
-
-	// 評価中に生成された文字列のリスト
-	sdim s_strs, 16, 1024
-	s_str_len = 0
-
-	// 評価中に生成された配列のリスト
-	// len: 配列の現在の長さ
-	// cell_l, cell_r: この配列の要素が占めるセルリストの範囲
-	dim s_array_lens, 1024
-	dim s_array_cell_ls, 1024
-	dim s_array_cell_rs, 1024
-	s_array_len = 0
-
-	// 評価中に生成された環境のリスト
-	// parent: この環境の親となる環境番号 (なければ 0)
-	// scope_i: この環境に対応するスコープ番号
-	// array_is: 引数やローカル変数を格納する配列番号
-	dim s_env_parents
-	dim s_env_scope_is
-	dim s_env_array_is
-	s_env_len = 0
-
-	// グローバル環境
-	s_env_i_global = -1
-
-	// 評価中に生成されたクロージャのリスト
-	// fun_i: このクロージャに対応する関数番号
-	// env_i: このクロージャが生成された環境番号
-	dim s_closure_fun_is
-	dim s_closure_env_is
-	s_closure_len = 0
-
-	// 外部関数呼び出しのフレーム
-	// array_i: 引数リストである配列番号
-	// result: 結果を格納するセル番号
-	// err: エラーが発生したかどうかを表す
-	s_extern_frame_array_i = -1
-	s_extern_frame_result = -1
-	s_extern_frame_err = false
-	s_extern_frame_err_message = ""
-
-	// プログラムカウンタ (次に実行するコマンド番号)
-	s_pc = 0
-
-	// 終了コード
-	s_eval_exit = 0
-
-	// エラー
-	// src_l, src_r: エラーが起こっているソースコード上の位置
-	sdim s_err_messages
-	dim s_err_src_ls
-	dim s_err_src_rs
-	s_err_len = 0
-
-	negi_lang_extern_fun_initialize
 	return
 
 // ###############################################
@@ -516,6 +349,15 @@
 
 // 入力されたプログラムの問題は実行時エラーとして報告する。(failwith は使わない。)
 // エラーの報告には、そのエラーが発生した箇所 (ソースコードのどのあたりか) を含める。
+
+#deffunc negi_lang_err_initialize
+
+	// src_l, src_r: エラーが起こっているソースコード上の位置
+	sdim s_err_messages
+	dim s_err_src_ls
+	dim s_err_src_rs
+	s_err_len = 0
+	return
 
 // 指定された位置の行番号 (y) と列番号 (x) を計算する。
 #deffunc negi_lang_find_pos int src_i, var out_y, var out_x
@@ -562,94 +404,6 @@
 	return
 
 // ###############################################
-// 外部関数
-// ###############################################
-
-// -----------------------------------------------
-// 外部関数リスト
-// -----------------------------------------------
-
-#deffunc negi_lang_extern_fun_add str name, label label
-
-	s_extern_fun_names(s_extern_fun_len) = name
-	s_extern_fun_labels(s_extern_fun_len) = label
-	s_extern_fun_len++
-	return
-
-#defcfunc negi_lang_extern_fun_find str name, \
-	local extern_fun_i
-
-	extern_fun_i = -1
-	repeat s_extern_fun_len
-		if s_extern_fun_names(cnt) == name {
-			extern_fun_i = cnt
-		}
-	loop
-	return extern_fun_i
-
-// -----------------------------------------------
-// 外部関数フレーム
-// -----------------------------------------------
-
-#defcfunc negi_lang_extern_arg_len
-
-	if s_extern_frame_array_i < 0 {
-		return 0
-	}
-	return s_array_lens(s_extern_frame_array_i)
-
-#defcfunc negi_lang_extern_arg_ty int index, \
-	local cell_i
-
-	if (0 <= index && index < negi_lang_extern_arg_len()) == false {
-		return ty_int
-	}
-	cell_i = negi_lang_array_ref(ty_array, s_extern_frame_array_i, index)
-	return s_cell_tys(cell_i)
-
-#defcfunc negi_lang_extern_arg_int int index, \
-	local cell_i
-
-	if (0 <= index && index < negi_lang_extern_arg_len()) == false {
-		return 0
-	}
-	cell_i = negi_lang_array_ref(ty_array, s_extern_frame_array_i, index)
-	return s_cell_vals(cell_i)
-
-#defcfunc negi_lang_extern_arg_str int index, \
-	local cell_i
-
-	if (0 <= index && index < negi_lang_extern_arg_len()) == false {
-		return 0
-	}
-	cell_i = negi_lang_array_ref(ty_array, s_extern_frame_array_i, index)
-	return s_strs(s_cell_vals(cell_i))
-
-// 組み込み関数専用。
-#deffunc negi_lang_extern_result_any int ty, int val
-
-	if s_extern_frame_result < 0 { return }
-	s_cell_tys(s_extern_frame_result) = ty
-	s_cell_vals(s_extern_frame_result) = val
-	return
-
-#deffunc negi_lang_extern_result_int int val
-
-	negi_lang_extern_result_any ty_int, val
-	return
-
-#deffunc negi_lang_extern_result_str var it
-
-	negi_lang_extern_result_any ty_str, negi_lang_str_add(it)
-	return
-
-#deffunc negi_lang_extern_result_err str message
-
-	s_extern_frame_err = true
-	s_extern_frame_err_message = message
-	return
-
-// ###############################################
 // 字句解析
 // ###############################################
 
@@ -682,6 +436,17 @@
 // -----------------------------------------------
 // トークンリスト
 // -----------------------------------------------
+
+#deffunc negi_lang_tok_initialize
+
+	// kind: 種類
+	// src_l: トークンを構成する文字列の開始の位置
+	// src_r: トークンを構成する文字列の終わりの位置
+	dim s_tok_kinds
+	dim s_tok_src_ls
+	dim s_tok_src_rs
+	s_tok_len = 0
+	return
 
 // ソースコードの位置 src_l から src_r までの文字列を種類 kind のトークンとしてリストに追加する。
 #deffunc negi_lang_tok_add int kind, int src_l, int src_r
@@ -852,6 +617,30 @@
 // 式リスト
 // -----------------------------------------------
 
+// 式 (抽象構文木のノード) のリスト。
+
+#deffunc negi_lang_exp_initialize
+
+	// kind: 種類
+	// int: 式に関連する整数値
+	// exp_l, exp_r: 式の左辺と右辺を指す式番号
+	// exp_conds: if の条件の式番号
+	// tok_i: 式に関連するトークン番号
+	dim s_exp_kinds
+	dim s_exp_exp_conds
+	dim s_exp_exp_ls
+	dim s_exp_exp_rs
+	dim s_exp_subexp_ls
+	dim s_exp_subexp_rs
+	dim s_exp_ints
+	sdim s_exp_strs
+	dim s_exp_tok_is
+	s_exp_len = 0
+
+	// プログラム全体からなる式の式番号
+	s_exp_i_root = exp_i_none
+	return
+
 // 式を追加して、その式番号を返す。
 #deffunc negi_lang_exp_add int kind, int tok_i
 	s_exp_kinds(s_exp_len) = kind
@@ -933,6 +722,14 @@
 // -----------------------------------------------
 // 部分式リスト
 // -----------------------------------------------
+
+#deffunc negi_lang_subexp_initialize
+
+	// 部分式のリスト
+	// exp_l, exp_r: 式の範囲
+	dim s_subexp_exp_is
+	s_subexp_len = 0
+	return
 
 #deffunc negi_lang_subexp_add array exp_is, int len, var out_subexp_l, var out_subexp_r, \
 	local i
@@ -1488,6 +1285,14 @@
 // ラベルリスト
 // -----------------------------------------------
 
+#deffunc negi_lang_label_initialize
+
+	// ラベルのリスト
+	// cmd_i: ラベルが指す命令列上の位置
+	dim s_label_cmd_is
+	s_label_len = 0
+	return
+
 #defcfunc negi_lang_label_add
 
 	s_label_cmd_is(s_label_len) = -1
@@ -1500,8 +1305,23 @@
 	return
 
 // -----------------------------------------------
-// スコープスタック
+// スコープリスト
 // -----------------------------------------------
+
+#deffunc negi_lang_scope_initialize
+
+	// parent: 親スコープのスコープ番号 (トップレベルなら 0)
+	// len: スコープに属する識別子の個数
+	dim s_scope_parents
+	dim s_scope_lens
+	dim s_scope_tok_is
+	s_scope_len = 1
+
+	// スコープスタックの一番上のスコープ番号
+	s_scope_current = scope_i_global
+
+	s_scope_parents(scope_i_global) = -1
+	return
 
 #deffunc negi_lang_scope_push int tok_i
 
@@ -1517,6 +1337,24 @@
 
 	assert s_scope_current >= 1
 	s_scope_current = s_scope_parents(s_scope_current)
+	return
+
+// -----------------------------------------------
+// ローカルリスト
+// -----------------------------------------------
+
+// スコープに属する識別子からなるリスト。
+
+#deffunc negi_lang_local_initialize
+
+	// scope_is: 識別子が属するスコープ番号
+	// indexes: 識別子がスコープにおいて何番目か
+	// tok_i: 識別子が定義される箇所のトークン番号
+	sdim s_local_idents
+	dim s_local_scope_is
+	dim s_local_indexes
+	dim s_local_tok_is
+	s_local_len = 0
 	return
 
 #deffunc negi_lang_local_add_var str ident, int tok_i
@@ -1553,6 +1391,20 @@
 // 関数リスト
 // -----------------------------------------------
 
+#deffunc negi_lang_fun_initialize
+
+	// 関数のリスト
+	// kind: 関数の種類
+	// name: 関数の名前
+	// scope_i: 関数本体が属するスコープ (クロージャのみ)
+	// label_i: 関数本体のラベル番号 (クロージャのみ)
+	dim s_fun_kinds
+	sdim s_fun_names
+	dim s_fun_scope_is
+	dim s_fun_label_is
+	s_fun_len = 0
+	return
+
 #defcfunc negi_lang_fun_add_closure int scope_i, int body_label_i
 
 	s_fun_kinds(s_fun_len) = fun_kind_closure
@@ -1565,6 +1417,15 @@
 // -----------------------------------------------
 // ループスタック
 // -----------------------------------------------
+
+#deffunc negi_lang_loop_initialize
+
+	// ループスタック
+	// break/continue のジャンプ先を決定するために使う。
+	// break: break のジャンプ先のラベル番号
+	dim s_loop_breaks
+	s_loop_len = 0
+	return
 
 #deffunc negi_lang_loop_push int break_label_i
 
@@ -1581,6 +1442,20 @@
 // -----------------------------------------------
 // 命令リスト
 // -----------------------------------------------
+
+#deffunc negi_lang_cmd_initialize
+
+	// kind: 命令の種類
+	// x, y: 命令がとる整数型の引数
+	// str: 命令がとる文字列型の引数
+	// tok_i: 命令に関連するトークン番号
+	dim s_cmd_kinds
+	dim s_cmd_xs
+	dim s_cmd_ys
+	sdim s_cmd_strs
+	dim s_cmd_tok_is
+	s_cmd_len = 0
+	return
 
 // 命令を追加する。
 // tok_i: この命令と関連するトークン番号
@@ -2068,6 +1943,26 @@
 // 中間言語のコードを実行して、実際に計算を行う。
 
 // -----------------------------------------------
+// 参照セルリスト
+// -----------------------------------------------
+
+// 変数や配列要素などのデータを配置する領域。メモリ空間のようなもの。
+
+#deffunc negi_lang_cell_initialize
+
+	// ty, val: セルの型タグと値
+	// stack_ptr: いまのスタックの末尾
+	// stack_ptr_max: スタック全体の末尾 (= ヒープの先頭)
+	// heap_ptr: いまのヒープの末尾
+	s_cell_len = 1024 * 1024 / 4 // 1MB
+	dim s_cell_tys, s_cell_len
+	dim s_cell_vals, s_cell_len
+	s_cell_i_stack_end = 0
+	s_cell_i_stack_max = s_cell_len / 4
+	s_cell_i_heap_end = s_cell_i_stack_max
+	return
+
+// -----------------------------------------------
 // スタック
 // -----------------------------------------------
 
@@ -2116,8 +2011,21 @@
 	return
 
 // -----------------------------------------------
-// フレーム
+// フレームスタック
 // -----------------------------------------------
+
+// 関数呼び出しのメタ情報からなるスタック。
+
+#deffunc negi_lang_frame_initialize
+
+	// cmd_i: return 直後に実行するコマンド番号
+	// env_i: 実行中の環境番号
+	// tok_i: フレームに関係のあるトークン番号
+	dim s_frame_cmd_is
+	dim s_frame_env_is
+	dim s_frame_tok_is
+	s_frame_len = 0
+	return
 
 #deffunc negi_lang_frame_push int cmd_i, int env_i, int tok_i
 
@@ -2137,6 +2045,12 @@
 // 文字列リスト
 // -----------------------------------------------
 
+#deffunc negi_lang_str_initialize
+
+	sdim s_strs, 16, 1024
+	s_str_len = 0
+	return
+
 // 文字列リストに追加して、その番号を返す。
 #defcfunc negi_lang_str_add str value
 
@@ -2147,6 +2061,16 @@
 // -----------------------------------------------
 // 配列リスト
 // -----------------------------------------------
+
+#deffunc negi_lang_array_initialize
+
+	// len: 配列の現在の長さ
+	// cell_l, cell_r: この配列の要素が占めるセルリストの範囲
+	dim s_array_lens, 1024
+	dim s_array_cell_ls, 1024
+	dim s_array_cell_rs, 1024
+	s_array_len = 0
+	return
 
 // 配列リストに新しい配列を追加して、その番号を返す。
 // capacity: この配列の長さの最大値
@@ -2242,6 +2166,20 @@
 // 環境リスト
 // -----------------------------------------------
 
+#deffunc negi_lang_env_initialize
+
+	// parent: この環境の親となる環境番号 (なければ 0)
+	// scope_i: この環境に対応するスコープ番号
+	// array_is: 引数やローカル変数を格納する配列番号
+	dim s_env_parents
+	dim s_env_scope_is
+	dim s_env_array_is
+	s_env_len = 0
+
+	// グローバル環境
+	s_env_i_global = -1
+	return
+
 #defcfunc negi_lang_env_add int parent_env_i, int fun_i, \
 	local array_i, local array_len, local scope_i
 
@@ -2274,6 +2212,15 @@
 // クロージャリスト
 // -----------------------------------------------
 
+#deffunc negi_lang_closure_initialize
+
+	// fun_i: このクロージャに対応する関数番号
+	// env_i: このクロージャが生成された環境番号
+	dim s_closure_fun_is
+	dim s_closure_env_is
+	s_closure_len = 0
+	return
+
 #defcfunc negi_lang_closure_add int fun_i, int env_i
 
 	assert s_fun_kinds(fun_i) == fun_kind_closure
@@ -2284,8 +2231,124 @@
 	return s_closure_len - 1
 
 // -----------------------------------------------
+// 外部関数リスト
+// -----------------------------------------------
+
+#deffunc negi_lang_extern_fun_initialize
+
+	// label: 関数が呼ばれたときに実行される HSP のラベル
+	dim s_extern_fun_names, 256
+	ldim s_extern_fun_labels, 256
+	s_extern_fun_len = 0
+
+	negi_lang_extern_fun_builtin
+	return
+
+#deffunc negi_lang_extern_fun_add str name, label label
+
+	s_extern_fun_names(s_extern_fun_len) = name
+	s_extern_fun_labels(s_extern_fun_len) = label
+	s_extern_fun_len++
+	return
+
+#defcfunc negi_lang_extern_fun_find str name, \
+	local extern_fun_i
+
+	extern_fun_i = -1
+	repeat s_extern_fun_len
+		if s_extern_fun_names(cnt) == name {
+			extern_fun_i = cnt
+		}
+	loop
+	return extern_fun_i
+
+// -----------------------------------------------
+// 外部関数フレーム
+// -----------------------------------------------
+
+// 外部関数の呼び出しのメタ情報を格納する。
+
+#deffunc negi_lang_extern_frame_initialize
+
+	// array_i: 引数リストである配列番号
+	// result: 結果を格納するセル番号
+	// err: エラーが発生したかどうかを表す
+	s_extern_frame_array_i = -1
+	s_extern_frame_result = -1
+	s_extern_frame_err = false
+	s_extern_frame_err_message = ""
+	return
+
+#defcfunc negi_lang_extern_arg_len
+
+	if s_extern_frame_array_i < 0 {
+		return 0
+	}
+	return s_array_lens(s_extern_frame_array_i)
+
+#defcfunc negi_lang_extern_arg_ty int index, \
+	local cell_i
+
+	if (0 <= index && index < negi_lang_extern_arg_len()) == false {
+		return ty_int
+	}
+	cell_i = negi_lang_array_ref(ty_array, s_extern_frame_array_i, index)
+	return s_cell_tys(cell_i)
+
+#defcfunc negi_lang_extern_arg_int int index, \
+	local cell_i
+
+	if (0 <= index && index < negi_lang_extern_arg_len()) == false {
+		return 0
+	}
+	cell_i = negi_lang_array_ref(ty_array, s_extern_frame_array_i, index)
+	return s_cell_vals(cell_i)
+
+#defcfunc negi_lang_extern_arg_str int index, \
+	local cell_i
+
+	if (0 <= index && index < negi_lang_extern_arg_len()) == false {
+		return 0
+	}
+	cell_i = negi_lang_array_ref(ty_array, s_extern_frame_array_i, index)
+	return s_strs(s_cell_vals(cell_i))
+
+// 組み込み関数専用。
+#deffunc negi_lang_extern_result_any int ty, int val
+
+	if s_extern_frame_result < 0 { return }
+	s_cell_tys(s_extern_frame_result) = ty
+	s_cell_vals(s_extern_frame_result) = val
+	return
+
+#deffunc negi_lang_extern_result_int int val
+
+	negi_lang_extern_result_any ty_int, val
+	return
+
+#deffunc negi_lang_extern_result_str var it
+
+	negi_lang_extern_result_any ty_str, negi_lang_str_add(it)
+	return
+
+#deffunc negi_lang_extern_result_err str message
+
+	s_extern_frame_err = true
+	s_extern_frame_err_message = message
+	return
+
+// -----------------------------------------------
 // 評価
 // -----------------------------------------------
+
+#deffunc negi_lang_eval_initialize
+
+	// プログラムカウンタ (次に実行するコマンド番号)
+	s_pc = 0
+
+	// 終了コード
+	s_eval_exit = 0
+	return
 
 // 異常終了する。
 #deffunc negi_lang_eval_abort str message, int tok_i
@@ -2707,6 +2770,8 @@
 #deffunc negi_lang_eval \
 	local global_var_len, local array_i, local exit_cmd_i
 
+	negi_lang_eval_initialize
+
 	assert s_cmd_len != 0
 
 	exit_cmd_i = s_cmd_len - 1
@@ -2724,9 +2789,31 @@
 // ###############################################
 
 // ソースコードをコンパイル・実行する。
-#deffunc negi_lang_eval_src str src, var out_exit_code
+#deffunc negi_lang_eval_src str param_src, var out_exit_code, \
+	local src
 
-	negi_lang_begin src
+	src = param_src
+
+	negi_lang_src_initialize src
+	negi_lang_err_initialize
+	negi_lang_tok_initialize
+	negi_lang_exp_initialize
+	negi_lang_subexp_initialize
+	negi_lang_label_initialize
+	negi_lang_scope_initialize
+	negi_lang_local_initialize
+	negi_lang_loop_initialize
+	negi_lang_fun_initialize
+	negi_lang_extern_fun_initialize
+	negi_lang_cmd_initialize
+	negi_lang_cell_initialize
+	negi_lang_frame_initialize
+	negi_lang_str_initialize
+	negi_lang_array_initialize
+	negi_lang_env_initialize
+	negi_lang_closure_initialize
+	negi_lang_extern_frame_initialize
+
 	negi_lang_tokenize
 	negi_lang_parse
 	negi_lang_gen
@@ -2746,7 +2833,7 @@
 
 #define ctype x_arg_val(%1) s_cell_vals(s_array_cell_ls(x_args) + (%1))
 
-#deffunc negi_lang_extern_fun_initialize
+#deffunc negi_lang_extern_fun_builtin
 
 	negi_lang_extern_fun_add "array_len", *l_array_len
 	negi_lang_extern_fun_add "array_push", *l_array_push
