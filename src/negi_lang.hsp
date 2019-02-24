@@ -282,19 +282,19 @@
 // 整数。値は整数値そのもの。
 #enum ty_int
 
-// 文字列。値は g_strs の要素番号。
+// 文字列。値は s_strs の要素番号。
 #enum ty_str
 
-// 配列。値は g_arrays の要素番号。
+// 配列。値は s_arrays の要素番号。
 #enum ty_array
 
-// 関数。値は g_funs の要素番号。
+// 関数。値は s_funs の要素番号。
 #enum ty_fun
 
-// クロージャ。値は g_closures の要素番号。
+// クロージャ。値は s_closures の要素番号。
 #enum ty_closure
 
-// 参照セル。値は g_cells の要素番号。
+// 参照セル。値は s_cells の要素番号。
 #enum ty_cell
 
 // -----------------------------------------------
@@ -316,7 +316,7 @@
 // 例えば exp_i は式番号 (式リストの要素番号) を表す。
 // 同様に exp_l, exp_r は左側の式番号と右側の式番号を表す。
 
-// モジュールの中にある、ローカル変数ではない変数の名前には g_ をつける。
+// モジュールの中にある、ローカル変数ではない変数の名前には s_ をつける。
 
 // 配列は nani_fields と nani_count の組み合わせで管理する。
 // 例えば文字列の配列で、各文字列の長さを変数に記録しておくときは、
@@ -329,17 +329,17 @@
 #deffunc negi_lang_begin str src
 
 	// 与えられたソースコード
-	g_src = src
-	g_src_len = strlen(src)
+	s_src = src
+	s_src_len = strlen(src)
 
 	// トークンのリスト
 	// kind: 種類
 	// src_l: トークンを構成する文字列の開始の位置
 	// src_r: トークンを構成する文字列の終わりの位置
-	dim g_tok_kinds
-	dim g_tok_src_ls
-	dim g_tok_src_rs
-	g_tok_count = 0
+	dim s_tok_kinds
+	dim s_tok_src_ls
+	dim s_tok_src_rs
+	s_tok_count = 0
 
 	// 式のリスト
 	// kind: 種類
@@ -347,144 +347,144 @@
 	// exp_l, exp_r: 式の左辺と右辺を指す式番号
 	// exp_conds: if の条件の式番号
 	// tok_i: 式に関連するトークン番号
-	dim g_exp_kinds
-	dim g_exp_exp_conds
-	dim g_exp_exp_ls
-	dim g_exp_exp_rs
-	dim g_exp_subexp_ls
-	dim g_exp_subexp_rs
-	dim g_exp_ints
-	sdim g_exp_strs
-	dim g_exp_tok_is
-	g_exp_count = 0
+	dim s_exp_kinds
+	dim s_exp_exp_conds
+	dim s_exp_exp_ls
+	dim s_exp_exp_rs
+	dim s_exp_subexp_ls
+	dim s_exp_subexp_rs
+	dim s_exp_ints
+	sdim s_exp_strs
+	dim s_exp_tok_is
+	s_exp_count = 0
 
 	// 部分式のリスト
 	// exp_l, exp_r: 式の範囲
-	dim g_subexp_exp_is
-	g_subexp_count = 0
+	dim s_subexp_exp_is
+	s_subexp_count = 0
 
 	// プログラム全体からなる式の式番号
-	g_exp_i_root = exp_i_none
+	s_exp_i_root = exp_i_none
 
 	// ラベルのリスト
 	// cmd_i: ラベルが指す命令列上の位置
-	dim g_label_cmd_is
-	g_label_count = 0
+	dim s_label_cmd_is
+	s_label_count = 0
 
 	// スコープスタック
 	// parent: 親スコープのスコープ番号 (トップレベルなら 0)
 	// len: スコープに属する識別子の個数
-	dim g_scope_parents
-	dim g_scope_lens
-	dim g_scope_tok_is
-	g_scope_count = 1
-	g_scope_current = scope_i_global
+	dim s_scope_parents
+	dim s_scope_lens
+	dim s_scope_tok_is
+	s_scope_count = 1
+	s_scope_current = scope_i_global
 
-	g_scope_parents(scope_i_global) = -1
+	s_scope_parents(scope_i_global) = -1
 
 	// ローカル識別子リスト
 	// scope_is: 識別子が属するスコープ番号
 	// indexes: 識別子がスコープにおいて何番目か
 	// tok_i: 識別子が定義される箇所のトークン番号
-	sdim g_local_idents
-	dim g_local_scope_is
-	dim g_local_indexes
-	dim g_local_tok_is
-	g_local_count = 0
+	sdim s_local_idents
+	dim s_local_scope_is
+	dim s_local_indexes
+	dim s_local_tok_is
+	s_local_count = 0
 
 	// ループスタック
 	// break/continue のジャンプ先を決定するために使う。
 	// break: break のジャンプ先のラベル番号
-	dim g_loop_breaks
-	dim g_loop_count
+	dim s_loop_breaks
+	dim s_loop_count
 
 	// 関数のリスト
 	// kind: 関数の種類
 	// name: 関数の名前
 	// scope_i: 関数本体が属するスコープ (クロージャのみ)
 	// label_i: 関数本体のラベル番号 (クロージャのみ)
-	dim g_fun_kinds
-	sdim g_fun_names
-	dim g_fun_scope_is
-	dim g_fun_label_is
-	g_fun_count = 1
+	dim s_fun_kinds
+	sdim s_fun_names
+	dim s_fun_scope_is
+	dim s_fun_label_is
+	s_fun_count = 1
 
 	// 命令列
 	// kind: 命令の種類
 	// x, y: 命令がとる整数型の引数
 	// str: 命令がとる文字列型の引数
 	// tok_i: 命令に関連するトークン番号
-	dim g_cmd_kinds
-	dim g_cmd_xs
-	dim g_cmd_ys
-	sdim g_cmd_strs
-	dim g_cmd_tok_is
-	g_cmd_count = 0
+	dim s_cmd_kinds
+	dim s_cmd_xs
+	dim s_cmd_ys
+	sdim s_cmd_strs
+	dim s_cmd_tok_is
+	s_cmd_count = 0
 
 	// セルリスト (オブジェクトを配置する領域。メモリ空間のようなもの。)
 	// ty, val: セルの型タグと値
 	// stack_ptr: いまのスタックの末尾
 	// stack_ptr_max: スタック全体の末尾 (= ヒープの先頭)
 	// heap_ptr: いまのヒープの末尾
-	g_cell_count = 1024 * 1024 / 4 // 1MB
-	dim g_cell_tys, g_cell_count
-	dim g_cell_vals, g_cell_count
-	g_cell_i_stack_end = 0
-	g_cell_i_stack_max = g_cell_count / 4
-	g_cell_i_heap_end = g_cell_i_stack_max
+	s_cell_count = 1024 * 1024 / 4 // 1MB
+	dim s_cell_tys, s_cell_count
+	dim s_cell_vals, s_cell_count
+	s_cell_i_stack_end = 0
+	s_cell_i_stack_max = s_cell_count / 4
+	s_cell_i_heap_end = s_cell_i_stack_max
 
 	// フレーム (関数呼び出しのメタ情報)
 	// cmd_i: return 直後に実行するコマンド番号
 	// env_i: 実行中の環境番号
 	// tok_i: フレームに関係のあるトークン番号
-	dim g_frame_cmd_is
-	dim g_frame_env_is
-	dim g_frame_tok_is
-	g_frame_count = 0
+	dim s_frame_cmd_is
+	dim s_frame_env_is
+	dim s_frame_tok_is
+	s_frame_count = 0
 
 	// 評価中に生成された文字列のリスト
-	sdim g_strs, 16, 1024
-	g_str_count = 0
+	sdim s_strs, 16, 1024
+	s_str_count = 0
 
 	// 評価中に生成された配列のリスト
 	// len: 配列の現在の長さ
 	// cell_l, cell_r: この配列の要素が占めるセルリストの範囲
-	dim g_array_lens, 1024
-	dim g_array_cell_ls, 1024
-	dim g_array_cell_rs, 1024
-	g_array_count = 0
+	dim s_array_lens, 1024
+	dim s_array_cell_ls, 1024
+	dim s_array_cell_rs, 1024
+	s_array_count = 0
 
 	// 評価中に生成された環境のリスト
 	// parent: この環境の親となる環境番号 (なければ 0)
 	// scope_i: この環境に対応するスコープ番号
 	// array_is: 引数やローカル変数を格納する配列番号
-	dim g_env_parents
-	dim g_env_scope_is
-	dim g_env_array_is
-	g_env_count = 0
+	dim s_env_parents
+	dim s_env_scope_is
+	dim s_env_array_is
+	s_env_count = 0
 
 	// グローバル環境
-	g_env_i_global = -1
+	s_env_i_global = -1
 
 	// 評価中に生成されたクロージャのリスト
 	// fun_i: このクロージャに対応する関数番号
 	// env_i: このクロージャが生成された環境番号
-	dim g_closure_fun_is
-	dim g_closure_env_is
-	g_closure_count = 0
+	dim s_closure_fun_is
+	dim s_closure_env_is
+	s_closure_count = 0
 
 	// プログラムカウンタ (次に実行するコマンド番号)
-	g_pc = 0
+	s_pc = 0
 
 	// 終了コード
-	g_eval_exit = 0
+	s_eval_exit = 0
 
 	// エラー
 	// src_l, src_r: エラーが起こっているソースコード上の位置
-	sdim g_err_messages
-	dim g_err_src_ls
-	dim g_err_src_rs
-	g_err_count = 0
+	sdim s_err_messages
+	dim s_err_src_ls
+	dim s_err_src_rs
+	s_err_count = 0
 	return
 
 // ###############################################
@@ -499,7 +499,7 @@
 	out_y = 0
 	out_x = 0
 	repeat src_i
-		if peek(g_src, cnt) == char_lf {
+		if peek(s_src, cnt) == char_lf {
 			out_y++
 			out_x = 0
 			continue
@@ -514,15 +514,15 @@
 	local text, local msg
 
 	buf = ""
-	repeat g_err_count
-		l = g_err_src_ls(cnt)
-		r = g_err_src_rs(cnt)
+	repeat s_err_count
+		l = s_err_src_ls(cnt)
+		r = s_err_src_rs(cnt)
 		negi_lang_find_pos l, ly, lx
 		negi_lang_find_pos r, ry, rx
 
-		text = strmid(g_src, l, r - l)
+		text = strmid(s_src, l, r - l)
 
-		buf += strf("%d:%d..%d:%d near '%s'\n  %s\n", 1 + ly, 1 + lx, 1 + ry, 1 + rx, text, g_err_messages(cnt))
+		buf += strf("%d:%d..%d:%d near '%s'\n  %s\n", 1 + ly, 1 + lx, 1 + ry, 1 + rx, text, s_err_messages(cnt))
 	loop
 	return
 
@@ -530,12 +530,12 @@
 // src_l, src_r: エラーに関連する、ソースコード上の範囲を表す。
 #deffunc negi_lang_err_add str message, int src_l, int src_r
 
-	d_trace "err: " + message + ", text = " + strmid(g_src, src_l, src_r - src_l)
+	d_trace "err: " + message + ", text = " + strmid(s_src, src_l, src_r - src_l)
 
-	g_err_messages(g_err_count) = message
-	g_err_src_ls(g_err_count) = src_l
-	g_err_src_rs(g_err_count) = src_r
- 	g_err_count++
+	s_err_messages(s_err_count) = message
+	s_err_src_ls(s_err_count) = src_l
+	s_err_src_rs(s_err_count) = src_r
+ 	s_err_count++
 	return
 
 // ###############################################
@@ -578,16 +578,16 @@
 	// tok_eof 以外のトークンの長さはゼロでない。さもないと無限ループになるおそれがある。
 	assert kind == tok_eof || src_l < src_r
 
- 	g_tok_kinds(g_tok_count) = kind
-	g_tok_src_ls(g_tok_count) = src_l
-	g_tok_src_rs(g_tok_count) = src_r
-	g_tok_count++
+ 	s_tok_kinds(s_tok_count) = kind
+	s_tok_src_ls(s_tok_count) = src_l
+	s_tok_src_rs(s_tok_count) = src_r
+	s_tok_count++
 	return
 
 // tok_i 番目のトークンを構成する文字列を取得する。
 #defcfunc negi_lang_tok_text int tok_i
-	assert tok_i < g_tok_count
-	return strmid(g_src, g_tok_src_ls(tok_i), g_tok_src_rs(tok_i) - g_tok_src_ls(tok_i))
+	assert tok_i < s_tok_count
+	return strmid(s_src, s_tok_src_ls(tok_i), s_tok_src_rs(tok_i) - s_tok_src_ls(tok_i))
 
 #defcfunc negi_lang_tok_detect_kind str text
 
@@ -607,7 +607,7 @@
 #deffunc negi_lang_tokenize \
 	local c, local l, local r, local kind, local text
 
-	assert g_tok_count == 0 // 変数が初期化済みであることを確認する。
+	assert s_tok_count == 0 // 変数が初期化済みであることを確認する。
 
 	repeat
 		// 1回のループで、位置 l から始まる1つのトークンを切り出す。
@@ -617,13 +617,13 @@
 
 		l = r
 
-		if l >= g_src_len {
+		if l >= s_src_len {
 			negi_lang_tok_add tok_eof, l, r
 			break
 		}
 
 		// 次の文字を変数に入れておく。(先読み)
-		c = peek(g_src, l)
+		c = peek(s_src, l)
 
 		// 空白と改行は無視する。
 		if c == ' ' || c == '\t' || c == char_cr || c == char_lf {
@@ -634,8 +634,8 @@
 		if is_digit(c) {
 			r++
 			repeat
-				if r >= g_src_len { break }
-				if is_digit(peek(g_src, r)) == false { break }
+				if r >= s_src_len { break }
+				if is_digit(peek(s_src, r)) == false { break }
 				r++
 			loop
 
@@ -646,8 +646,8 @@
 		if c == '"' {
 			r++
 			repeat
-				if r >= g_src_len { break }
-				c = peek(g_src, r)
+				if r >= s_src_len { break }
+				c = peek(s_src, r)
 
 				if c == char_cr || c == char_lf {
 					break
@@ -666,14 +666,14 @@
 		if c == '_' || is_alphabet(c) {
 			r++
 			repeat
-				if r >= g_src_len { break }
+				if r >= s_src_len { break }
 
-				c = peek(g_src, r)
+				c = peek(s_src, r)
 				if is_ident_char(c) == false { break }
 				r++
 			loop
 
-			text = strmid(g_src, l, r - l)
+			text = strmid(s_src, l, r - l)
 			kind = negi_lang_tok_detect_kind(text)
 			negi_lang_tok_add kind, l, r
 			continue
@@ -696,9 +696,9 @@
 		if is_op_char(c) {
 			r++
 			repeat
-				if r >= g_src_len { break }
+				if r >= s_src_len { break }
 
-				c = peek(g_src, r)
+				c = peek(s_src, r)
 				if is_op_char(c) == false { break }
 				r++
 			loop
@@ -712,7 +712,7 @@
 		negi_lang_tok_add tok_err, l, r
 	loop
 
-	assert r == g_src_len
+	assert r == s_src_len
 	return
 
 // ###############################################
@@ -743,48 +743,48 @@
 
 // 式を追加して、その式番号を返す。
 #deffunc negi_lang_exp_add int kind, int tok_i
-	g_exp_kinds(g_exp_count) = kind
-	g_exp_exp_ls(g_exp_count) = exp_i_none
-	g_exp_exp_rs(g_exp_count) = exp_i_none
-	g_exp_exp_conds(g_exp_count) = exp_i_none
-	g_exp_subexp_ls(g_exp_count) = 0
-	g_exp_subexp_rs(g_exp_count) = 0
-	g_exp_ints(g_exp_count) = 0
-	g_exp_strs(g_exp_count) = ""
-	g_exp_tok_is(g_exp_count) = tok_i
-	g_exp_count++
+	s_exp_kinds(s_exp_count) = kind
+	s_exp_exp_ls(s_exp_count) = exp_i_none
+	s_exp_exp_rs(s_exp_count) = exp_i_none
+	s_exp_exp_conds(s_exp_count) = exp_i_none
+	s_exp_subexp_ls(s_exp_count) = 0
+	s_exp_subexp_rs(s_exp_count) = 0
+	s_exp_ints(s_exp_count) = 0
+	s_exp_strs(s_exp_count) = ""
+	s_exp_tok_is(s_exp_count) = tok_i
+	s_exp_count++
 	return
 
 // 整数値をパラメーターに持つ式を追加する。
 #defcfunc negi_lang_exp_add_int int kind, int value, int tok_i
 
 	negi_lang_exp_add kind, tok_i
-	g_exp_ints(g_exp_count - 1) = value
-	return g_exp_count - 1
+	s_exp_ints(s_exp_count - 1) = value
+	return s_exp_count - 1
 
 // 文字列をパラメーターに持つ式を追加する。
 #defcfunc negi_lang_exp_add_str int kind, str value, int tok_i
 
 	negi_lang_exp_add kind, tok_i
-	g_exp_strs(g_exp_count - 1) = value
-	return g_exp_count - 1
+	s_exp_strs(s_exp_count - 1) = value
+	return s_exp_count - 1
 
 // エラーを表す式を追加する。
 #defcfunc negi_lang_exp_add_err str message, int tok_i
 
 	negi_lang_exp_add exp_err, tok_i
-	g_exp_strs(g_exp_count - 1) = message
-	return g_exp_count - 1
+	s_exp_strs(s_exp_count - 1) = message
+	return s_exp_count - 1
 
 // 2項演算を表す式を追加する。
 // exp_l, exp_r: 左辺と右辺の式番号
 #defcfunc negi_lang_exp_add_bin int op, int exp_l, int exp_r, int tok_i
 
 	negi_lang_exp_add exp_op, tok_i
-	g_exp_ints(g_exp_count - 1) = op
-	g_exp_exp_ls(g_exp_count - 1) = exp_l
-	g_exp_exp_rs(g_exp_count - 1) = exp_r
-	return g_exp_count - 1
+	s_exp_ints(s_exp_count - 1) = op
+	s_exp_exp_ls(s_exp_count - 1) = exp_l
+	s_exp_exp_rs(s_exp_count - 1) = exp_r
+	return s_exp_count - 1
 
 #defcfunc negi_lang_exp_add_subexps int kind, array exp_is, int subexp_count, int tok_i, \
 	local subexp_l, local subexp_r
@@ -792,32 +792,32 @@
 	negi_lang_subexp_add exp_is, subexp_count, subexp_l, subexp_r
 
 	negi_lang_exp_add kind, tok_i
-	g_exp_subexp_ls(g_exp_count - 1) = subexp_l
-	g_exp_subexp_rs(g_exp_count - 1) = subexp_r
-	return g_exp_count - 1
+	s_exp_subexp_ls(s_exp_count - 1) = subexp_l
+	s_exp_subexp_rs(s_exp_count - 1) = subexp_r
+	return s_exp_count - 1
 
 #defcfunc negi_lang_exp_add_if int cond_exp_i, int then_exp_i, int else_exp_i, int tok_i
 
 	negi_lang_exp_add exp_if, tok_i
-	g_exp_exp_conds(g_exp_count - 1) = cond_exp_i
-	g_exp_exp_ls(g_exp_count - 1) = then_exp_i
-	g_exp_exp_rs(g_exp_count - 1) = else_exp_i
-	return g_exp_count - 1
+	s_exp_exp_conds(s_exp_count - 1) = cond_exp_i
+	s_exp_exp_ls(s_exp_count - 1) = then_exp_i
+	s_exp_exp_rs(s_exp_count - 1) = else_exp_i
+	return s_exp_count - 1
 
 // let 式を追加する。
 #defcfunc negi_lang_exp_add_let int ident_tok_i, int init_exp_i, int tok_i
 
 	negi_lang_exp_add exp_let, tok_i
-	g_exp_ints(g_exp_count - 1) = ident_tok_i
-	g_exp_exp_rs(g_exp_count - 1) = init_exp_i
-	return g_exp_count - 1
+	s_exp_ints(s_exp_count - 1) = ident_tok_i
+	s_exp_exp_rs(s_exp_count - 1) = init_exp_i
+	return s_exp_count - 1
 
 #defcfunc negi_lang_exp_add_while int cond_exp_i, int body_exp_i, int tok_i
 
 	negi_lang_exp_add exp_while, tok_i
-	g_exp_exp_conds(g_exp_count - 1) = cond_exp_i
-	g_exp_exp_ls(g_exp_count - 1) = body_exp_i
-	return g_exp_count - 1
+	s_exp_exp_conds(s_exp_count - 1) = cond_exp_i
+	s_exp_exp_ls(s_exp_count - 1) = body_exp_i
+	return s_exp_count - 1
 
 // -----------------------------------------------
 // 部分式リスト
@@ -826,13 +826,13 @@
 #deffunc negi_lang_subexp_add array exp_is, int len, var out_subexp_l, var out_subexp_r, \
 	local i
 
-	out_subexp_l = g_subexp_count
-	out_subexp_r = g_subexp_count + len
-	g_subexp_count += len
+	out_subexp_l = s_subexp_count
+	out_subexp_r = s_subexp_count + len
+	s_subexp_count += len
 
 	repeat len
 		i = len - 1 - cnt
-		g_subexp_exp_is(out_subexp_l + i) = exp_is(i)
+		s_subexp_exp_is(out_subexp_l + i) = exp_is(i)
 	loop
 	return
 
@@ -844,7 +844,7 @@
 #defcfunc negi_lang_parse_str var tok_i, \
 	local text, local text_len, local exp_i
 
-	assert g_tok_kinds(tok_i) == tok_str
+	assert s_tok_kinds(tok_i) == tok_str
 
 	text = negi_lang_tok_text(tok_i)
 	text_len = strlen(text)
@@ -867,7 +867,7 @@
 	len = 0
 	repeat
 		item_tok_i = tok_i
-		kind = g_tok_kinds(tok_i)
+		kind = s_tok_kinds(tok_i)
 		if tok_leads_term(kind) == false {
 			break
 		}
@@ -876,7 +876,7 @@
 		out_exp_is(len) = exp_i
 		len++
 
-		if g_tok_kinds(tok_i) != tok_comma {
+		if s_tok_kinds(tok_i) != tok_comma {
 			break
 		}
 		tok_i++
@@ -894,7 +894,7 @@
 	negi_lang_parse_list tok_i, bracket_tok_i, exp_is, subexp_count
 	exp_i = negi_lang_exp_add_subexps(exp_array, exp_is, subexp_count, bracket_tok_i)
 
-	if g_tok_kinds(tok_i) != tok_bracket_r {
+	if s_tok_kinds(tok_i) != tok_bracket_r {
 		return negi_lang_exp_add_err("角カッコが閉じられていません。", bracket_tok_i)
 	}
 	tok_i++
@@ -903,13 +903,13 @@
 #defcfunc negi_lang_parse_block var tok_i, \
 	local brace_tok_i, local exp_i
 
-	assert g_tok_kinds(tok_i) == tok_brace_l
+	assert s_tok_kinds(tok_i) == tok_brace_l
 	brace_tok_i = tok_i
 	tok_i++
 
 	exp_i = negi_lang_parse_exp(tok_i)
 
-	if g_tok_kinds(tok_i) != tok_brace_r {
+	if s_tok_kinds(tok_i) != tok_brace_r {
 		return negi_lang_exp_add_err("波カッコが閉じられていません。", brace_tok_i)
 	}
 	tok_i++
@@ -918,26 +918,26 @@
 #defcfunc negi_lang_parse_if var tok_i, \
 	local if_tok_i, local cond_exp_i, local then_exp_i, local else_exp_i
 
-	assert g_tok_kinds(tok_i) == tok_if
+	assert s_tok_kinds(tok_i) == tok_if
 	if_tok_i = tok_if
 	tok_i++
 
-	if g_tok_kinds(tok_i) != tok_paren_l {
+	if s_tok_kinds(tok_i) != tok_paren_l {
 		return negi_lang_exp_add_err("丸カッコが必要です。", tok_i)
 	}
 	cond_exp_i = negi_lang_parse_atom(tok_i)
 
-	if g_tok_kinds(tok_i) != tok_brace_l {
+	if s_tok_kinds(tok_i) != tok_brace_l {
 		return negi_lang_exp_add_err("波カッコが必要です。", tok_i)
 	}
 	then_exp_i = negi_lang_parse_block(tok_i)
 
-	if g_tok_kinds(tok_i) == tok_else {
+	if s_tok_kinds(tok_i) == tok_else {
 		tok_i++
 
-		if g_tok_kinds(tok_i) == tok_if {
+		if s_tok_kinds(tok_i) == tok_if {
 			else_exp_i = negi_lang_parse_if(tok_i)
-		} else : if g_tok_kinds(tok_i) == tok_brace_l {
+		} else : if s_tok_kinds(tok_i) == tok_brace_l {
 			else_exp_i = negi_lang_parse_block(tok_i)
 		} else {
 			else_exp_i = negi_lang_exp_add_err("if または波カッコが必要です。", tok_i)
@@ -952,16 +952,16 @@
 #defcfunc negi_lang_parse_while var tok_i, \
 	local while_tok_i, local cond_exp_i, local body_exp_i
 
-	assert g_tok_kinds(tok_i) == tok_while
+	assert s_tok_kinds(tok_i) == tok_while
 	while_tok_i = tok_if
 	tok_i++
 
-	if g_tok_kinds(tok_i) != tok_paren_l {
+	if s_tok_kinds(tok_i) != tok_paren_l {
 		return negi_lang_exp_add_err("丸カッコが必要です。", tok_i)
 	}
 	cond_exp_i = negi_lang_parse_atom(tok_i)
 
-	if g_tok_kinds(tok_i) != tok_brace_l {
+	if s_tok_kinds(tok_i) != tok_brace_l {
 		return negi_lang_exp_add_err("波カッコが必要です。", tok_i)
 	}
 	body_exp_i = negi_lang_parse_block(tok_i)
@@ -971,7 +971,7 @@
 #defcfunc negi_lang_parse_break var tok_i, \
 	local break_tok_i
 
-	assert g_tok_kinds(tok_i) == tok_break
+	assert s_tok_kinds(tok_i) == tok_break
 	break_tok_i = tok_i
 	tok_i++
 
@@ -981,11 +981,11 @@
 	local fun_tok_i, local paren_tok_i, local exp_is, local subexp_count, \
 	local body_exp_i, local fun_exp_i
 
-	assert g_tok_kinds(tok_i) == tok_fun
+	assert s_tok_kinds(tok_i) == tok_fun
 	fun_tok_i = tok_i
 	tok_i++
 
-	if g_tok_kinds(tok_i) != tok_paren_l {
+	if s_tok_kinds(tok_i) != tok_paren_l {
 		return negi_lang_exp_add_err("仮引数リストが必要です。", tok_i)
 	}
 	paren_tok_i = tok_i
@@ -993,73 +993,73 @@
 
 	negi_lang_parse_list tok_i, paren_tok_i, exp_is, subexp_count
 
-	if g_tok_kinds(tok_i) != tok_paren_r {
+	if s_tok_kinds(tok_i) != tok_paren_r {
 		return negi_lang_exp_add_err("丸カッコが閉じられていません。", paren_tok_i)
 	}
 	tok_i++
 
-	if g_tok_kinds(tok_i) == tok_brace_l {
+	if s_tok_kinds(tok_i) == tok_brace_l {
 		body_exp_i = negi_lang_parse_block(tok_i)
 	} else {
 		body_exp_i = negi_lang_parse_term(tok_i)
 	}
 
 	fun_exp_i = negi_lang_exp_add_subexps(exp_fun, exp_is, subexp_count, fun_tok_i)
-	g_exp_exp_ls(fun_exp_i) = body_exp_i
+	s_exp_exp_ls(fun_exp_i) = body_exp_i
 
 	return fun_exp_i
 
 #defcfunc negi_lang_parse_return var tok_i, \
 	local return_tok_i, local exp_i, local exp_l
 
-	assert g_tok_kinds(tok_i) == tok_return
+	assert s_tok_kinds(tok_i) == tok_return
 	return_tok_i = tok_i
 	tok_i++
 
-	if tok_leads_term(g_tok_kinds(tok_i)) {
+	if tok_leads_term(s_tok_kinds(tok_i)) {
 		exp_l = negi_lang_parse_term(tok_i)
 	} else {
 		exp_l = negi_lang_exp_add_int(exp_int, 0, return_tok_i)
 	}
 
 	exp_i = negi_lang_exp_add_int(exp_return, 0, return_tok_i)
-	g_exp_exp_ls(exp_i) = exp_l
+	s_exp_exp_ls(exp_i) = exp_l
 	return exp_i
 
 #defcfunc negi_lang_parse_atom var tok_i, \
 	local value, local exp_i, local op_tok_i
 
-	if g_tok_kinds(tok_i) == tok_int {
+	if s_tok_kinds(tok_i) == tok_int {
 		value = int(negi_lang_tok_text(tok_i))
 		exp_i = negi_lang_exp_add_int(exp_int, value, tok_i)
 		tok_i++
 		return exp_i
 	}
-	if g_tok_kinds(tok_i) == tok_str {
+	if s_tok_kinds(tok_i) == tok_str {
 		return negi_lang_parse_str(tok_i)
 	}
-	if g_tok_kinds(tok_i) == tok_ident {
+	if s_tok_kinds(tok_i) == tok_ident {
 		value = negi_lang_tok_text(tok_i)
 		exp_i = negi_lang_exp_add_str(exp_ident, value, tok_i)
 		tok_i++
 		return exp_i
 	}
-	if g_tok_kinds(tok_i) == tok_paren_l {
+	if s_tok_kinds(tok_i) == tok_paren_l {
 		op_tok_i = tok_i
 		tok_i++
 		exp_i = negi_lang_parse_term(tok_i)
-		if g_tok_kinds(tok_i) != tok_paren_r {
+		if s_tok_kinds(tok_i) != tok_paren_r {
 			return negi_lang_exp_add_err("丸カッコが閉じられていません。", op_tok_i)
 		}
 		tok_i++
 		return exp_i
 	}
-	if g_tok_kinds(tok_i) == tok_bracket_l {
+	if s_tok_kinds(tok_i) == tok_bracket_l {
 		return negi_lang_parse_array(tok_i)
 	}
 
 	// 項のパースができなかったので、次のトークンが項の始まりを表すものではないことが分かる。
-	assert tok_leads_term(g_tok_kinds(tok_i)) == false
+	assert tok_leads_term(s_tok_kinds(tok_i)) == false
 
 	return negi_lang_exp_add_err("Expected an expression", tok_i)
 
@@ -1072,13 +1072,13 @@
 	exp_l = negi_lang_parse_atom(tok_i)
 
 	repeat
-		if g_tok_kinds(tok_i) == tok_bracket_l {
+		if s_tok_kinds(tok_i) == tok_bracket_l {
 			op_tok_i = tok_i
 			tok_i++
 
 			exp_r = negi_lang_parse_term(tok_i)
 
-			if g_tok_kinds(tok_i) != tok_bracket_r {
+			if s_tok_kinds(tok_i) != tok_bracket_r {
 				exp_l = negi_lang_exp_add_err("角カッコが閉じられていません。", op_tok_i)
 				break
 			}
@@ -1088,13 +1088,13 @@
 			continue
 		}
 
-		if g_tok_kinds(tok_i) == tok_paren_l {
+		if s_tok_kinds(tok_i) == tok_paren_l {
 			op_tok_i = tok_i
 			tok_i++
 
 			negi_lang_parse_list tok_i, op_tok_i, exp_is, subexp_count
 
-			if g_tok_kinds(tok_i) != tok_paren_r {
+			if s_tok_kinds(tok_i) != tok_paren_r {
 				exp_l = negi_lang_exp_add_err("丸カッコが閉じられていません。", op_tok_i)
 				break
 			}
@@ -1102,7 +1102,7 @@
 
 			exp_r = exp_l
 			exp_l = negi_lang_exp_add_subexps(exp_call, exp_is, subexp_count, op_tok_i)
-			g_exp_exp_ls(exp_l) = exp_r
+			s_exp_exp_ls(exp_l) = exp_r
 			continue
 		}
 
@@ -1116,7 +1116,7 @@
 #defcfunc negi_lang_parse_op var tok_i, int op_level, \
 	local op_text
 
-	if g_tok_kinds(tok_i) != tok_op {
+	if s_tok_kinds(tok_i) != tok_op {
 		return op_err
 	}
 
@@ -1186,7 +1186,7 @@
 	exp_l = negi_lang_parse_bin_next(tok_i, op_level)
 
 	repeat
-		if g_tok_kinds(tok_i) != tok_op {
+		if s_tok_kinds(tok_i) != tok_op {
 			break
 		}
 
@@ -1208,7 +1208,7 @@
 
 	exp_l = negi_lang_parse_bin(tok_i, op_level_cmp)
 
-	if g_tok_kinds(tok_i) == tok_op {
+	if s_tok_kinds(tok_i) == tok_op {
 		op_tok_i = tok_i
 		op = negi_lang_parse_op(tok_i, op_level_set)
 		if op != op_err {
@@ -1225,7 +1225,7 @@
 
 	cond_exp_i = negi_lang_parse_set(tok_i)
 
-	if (g_tok_kinds(tok_i) == tok_op && negi_lang_tok_text(tok_i) == "?") == false {
+	if (s_tok_kinds(tok_i) == tok_op && negi_lang_tok_text(tok_i) == "?") == false {
 		return cond_exp_i
 	}
 	question_tok_i = tok_i
@@ -1233,7 +1233,7 @@
 
 	then_exp_i = negi_lang_parse_term(tok_i)
 
-	if (g_tok_kinds(tok_i) == tok_op && negi_lang_tok_text(tok_i) == ":") == false {
+	if (s_tok_kinds(tok_i) == tok_op && negi_lang_tok_text(tok_i) == ":") == false {
 		return negi_lang_exp_add_err("コロンが必要です。", question_tok_i)
 	}
 	tok_i++
@@ -1244,9 +1244,9 @@
 
 #defcfunc negi_lang_parse_term var tok_i
 
-	assert tok_leads_term(g_tok_kinds(tok_i))
+	assert tok_leads_term(s_tok_kinds(tok_i))
 
-	if g_tok_kinds(tok_i) == tok_fun {
+	if s_tok_kinds(tok_i) == tok_fun {
 		return negi_lang_parse_fun(tok_i)
 	}
 	return negi_lang_parse_cond(tok_i)
@@ -1254,17 +1254,17 @@
 #defcfunc negi_lang_parse_let var tok_i, \
 	local let_tok_i, local ident_tok_i, local init_exp_i
 
-	assert g_tok_kinds(tok_i) == tok_let
+	assert s_tok_kinds(tok_i) == tok_let
 	let_tok_i = tok_i
 	tok_i++
 
-	if g_tok_kinds(tok_i) != tok_ident {
+	if s_tok_kinds(tok_i) != tok_ident {
 		return negi_lang_exp_add_err("変数名が必要です。", tok_i)
 	}
 	ident_tok_i = tok_i
 	tok_i++
 
-	if (g_tok_kinds(tok_i) == tok_op && negi_lang_tok_text(tok_i) == "=") == false {
+	if (s_tok_kinds(tok_i) == tok_op && negi_lang_tok_text(tok_i) == "=") == false {
 		return negi_lang_exp_add_err("'=' が必要です。", tok_i)
 	}
 	tok_i++
@@ -1275,21 +1275,21 @@
 
 #defcfunc negi_lang_parse_stmt var tok_i
 
-	assert tok_leads_stmt(g_tok_kinds(tok_i))
+	assert tok_leads_stmt(s_tok_kinds(tok_i))
 
-	if g_tok_kinds(tok_i) == tok_let {
+	if s_tok_kinds(tok_i) == tok_let {
 		return negi_lang_parse_let(tok_i)
 	}
-	if g_tok_kinds(tok_i) == tok_if {
+	if s_tok_kinds(tok_i) == tok_if {
 		return negi_lang_parse_if(tok_i)
 	}
-	if g_tok_kinds(tok_i) == tok_while {
+	if s_tok_kinds(tok_i) == tok_while {
 		return negi_lang_parse_while(tok_i)
 	}
-	if g_tok_kinds(tok_i) == tok_break {
+	if s_tok_kinds(tok_i) == tok_break {
 		return negi_lang_parse_break(tok_i)
 	}
-	if g_tok_kinds(tok_i) == tok_return {
+	if s_tok_kinds(tok_i) == tok_return {
 		return negi_lang_parse_return(tok_i)
 	}
 	return negi_lang_parse_term(tok_i)
@@ -1303,11 +1303,11 @@
 	// セミコロンを読み飛ばす。
 	repeat
 		// ; nanika ---> nanika
-		if g_tok_kinds(tok_i) != tok_semi { break }
+		if s_tok_kinds(tok_i) != tok_semi { break }
 		tok_i++
 	loop
 
-	kind = g_tok_kinds(tok_i)
+	kind = s_tok_kinds(tok_i)
 	if tok_leads_stmt(kind) == false {
 		return negi_lang_exp_add_int(exp_int, 0, semi_tok_i)
 	}
@@ -1320,11 +1320,11 @@
 		// セミコロンを読み飛ばす。
 		repeat
 			// ; nanika ---> nanika
-			if g_tok_kinds(tok_i) != tok_semi { break }
+			if s_tok_kinds(tok_i) != tok_semi { break }
 			tok_i++
 		loop
 
-		kind = g_tok_kinds(tok_i)
+		kind = s_tok_kinds(tok_i)
 		if tok_leads_stmt(kind) == false && semi_tok_i != tok_i {
 			// nanika ; ---> nanika ; 0
 			exp_r = negi_lang_exp_add_int(exp_int, 0, semi_tok_i)
@@ -1350,19 +1350,19 @@
 #deffunc negi_lang_parse \
 	local exp_i, local tok_i
 
-	assert g_exp_count == 0
+	assert s_exp_count == 0
 
 	// 特定の式を登録する。
 	exp_i = negi_lang_exp_add_err("NOT AN EXPRESSION", 0)
 	assert exp_i == exp_i_none
 
 	tok_i = 0
-	g_exp_i_root = negi_lang_parse_exp(tok_i)
-	assert g_exp_i_root != exp_i_none
+	s_exp_i_root = negi_lang_parse_exp(tok_i)
+	assert s_exp_i_root != exp_i_none
 
-	if g_tok_kinds(tok_i) != tok_eof {
-		d_trace "tok_i = " + tok_i + ", kind = " + g_tok_kinds(tok_i)
-		negi_lang_err_add "この字句を解釈できませんでした。", g_tok_src_ls(tok_i), g_tok_src_rs(tok_i)
+	if s_tok_kinds(tok_i) != tok_eof {
+		d_trace "tok_i = " + tok_i + ", kind = " + s_tok_kinds(tok_i)
+		negi_lang_err_add "この字句を解釈できませんでした。", s_tok_src_ls(tok_i), s_tok_src_rs(tok_i)
 	}
 	return
 
@@ -1379,13 +1379,13 @@
 
 #defcfunc negi_lang_label_add
 
-	g_label_cmd_is(g_label_count) = -1
-	g_label_count++
-	return g_label_count - 1
+	s_label_cmd_is(s_label_count) = -1
+	s_label_count++
+	return s_label_count - 1
 
 #deffunc negi_lang_label_set int label_i, int cmd_i
 
-	g_label_cmd_is(label_i) = cmd_i
+	s_label_cmd_is(label_i) = cmd_i
 	return
 
 // -----------------------------------------------
@@ -1394,47 +1394,47 @@
 
 #deffunc negi_lang_scope_push int tok_i
 
-	g_scope_parents(g_scope_count) = g_scope_current
-	g_scope_lens(g_scope_count) = 0
-	g_scope_tok_is(g_scope_count) = tok_i
-	g_scope_count++
+	s_scope_parents(s_scope_count) = s_scope_current
+	s_scope_lens(s_scope_count) = 0
+	s_scope_tok_is(s_scope_count) = tok_i
+	s_scope_count++
 
-	g_scope_current = g_scope_count - 1
+	s_scope_current = s_scope_count - 1
 	return
 
 #deffunc negi_lang_scope_pop
 
-	assert g_scope_current >= 1
-	g_scope_current = g_scope_parents(g_scope_current)
+	assert s_scope_current >= 1
+	s_scope_current = s_scope_parents(s_scope_current)
 	return
 
 #deffunc negi_lang_local_add_var str ident, int tok_i
 
-	g_scope_lens(g_scope_current)++
+	s_scope_lens(s_scope_current)++
 
-	g_local_scope_is(g_local_count) = g_scope_current
-	g_local_indexes(g_local_count) = g_scope_lens(g_scope_current) - 1
-	g_local_idents(g_local_count) = ident
-	g_local_tok_is(g_local_count) = tok_i
-	g_local_count++
+	s_local_scope_is(s_local_count) = s_scope_current
+	s_local_indexes(s_local_count) = s_scope_lens(s_scope_current) - 1
+	s_local_idents(s_local_count) = ident
+	s_local_tok_is(s_local_count) = tok_i
+	s_local_count++
 	return
 
 #deffunc negi_lang_local_find_var str ident, var out_index, \
 	local scope_i
 
 	out_index = -1
-	scope_i = g_scope_current
+	scope_i = s_scope_current
 	repeat
-		repeat g_local_count
-			if g_local_scope_is(cnt) != scope_i { continue }
-			if g_local_idents(cnt) != ident { continue }
+		repeat s_local_count
+			if s_local_scope_is(cnt) != scope_i { continue }
+			if s_local_idents(cnt) != ident { continue }
 			out_index = cnt
 			break
 		loop
 
-		if g_scope_parents(scope_i) < 0 { break }
-		assert scope_i != g_scope_parents(scope_i)
-		scope_i = g_scope_parents(scope_i)
+		if s_scope_parents(scope_i) < 0 { break }
+		assert scope_i != s_scope_parents(scope_i)
+		scope_i = s_scope_parents(scope_i)
 	loop
 	return
 
@@ -1444,12 +1444,12 @@
 
 #defcfunc negi_lang_fun_add_closure int scope_i, int body_label_i
 
-	g_fun_kinds(g_fun_count) = fun_kind_closure
-	g_fun_names(g_fun_count) = "<anonymous: " + body_label_i + ">"
-	g_fun_scope_is(g_fun_count) = scope_i
-	g_fun_label_is(g_fun_count) = body_label_i
-	g_fun_count++
-	return g_fun_count - 1
+	s_fun_kinds(s_fun_count) = fun_kind_closure
+	s_fun_names(s_fun_count) = "<anonymous: " + body_label_i + ">"
+	s_fun_scope_is(s_fun_count) = scope_i
+	s_fun_label_is(s_fun_count) = body_label_i
+	s_fun_count++
+	return s_fun_count - 1
 
 // -----------------------------------------------
 // ループスタック
@@ -1457,14 +1457,14 @@
 
 #deffunc negi_lang_loop_push int break_label_i
 
-	g_loop_breaks(g_loop_count) = break_label_i
-	g_loop_count++
+	s_loop_breaks(s_loop_count) = break_label_i
+	s_loop_count++
 	return
 
 #deffunc negi_lang_loop_pop
 
-	assert g_loop_count >= 1
-	g_loop_count--
+	assert s_loop_count >= 1
+	s_loop_count--
 	return
 
 // -----------------------------------------------
@@ -1475,39 +1475,39 @@
 // tok_i: この命令と関連するトークン番号
 #deffunc negi_lang_cmd_add int kind, int tok_i
 
-	g_cmd_kinds(g_cmd_count) = kind
-	g_cmd_xs(g_cmd_count) = 0
-	g_cmd_ys(g_cmd_count) = 0
-	g_cmd_strs(g_cmd_count) = ""
-	g_cmd_tok_is(g_cmd_count) = tok_i
-	g_cmd_count++
+	s_cmd_kinds(s_cmd_count) = kind
+	s_cmd_xs(s_cmd_count) = 0
+	s_cmd_ys(s_cmd_count) = 0
+	s_cmd_strs(s_cmd_count) = ""
+	s_cmd_tok_is(s_cmd_count) = tok_i
+	s_cmd_count++
 	return
 
 // エラーを報告する命令を追加する。
 #deffunc negi_lang_cmd_add_err str message, int tok_i
 
 	negi_lang_cmd_add cmd_err, tok_i
-	g_cmd_strs(g_cmd_count - 1) = message
+	s_cmd_strs(s_cmd_count - 1) = message
 	return
 
 // 整数値を引数に持つ命令を追加する。
 #deffunc negi_lang_cmd_add_int int kind, int value, int tok_i
 
 	negi_lang_cmd_add kind, tok_i
-	g_cmd_xs(g_cmd_count - 1) = value
+	s_cmd_xs(s_cmd_count - 1) = value
 	return
 
 // 文字列を引数に持つ命令を追加する。
 #deffunc negi_lang_cmd_add_str int kind, str value, int tok_i
 
 	negi_lang_cmd_add kind, tok_i
-	g_cmd_strs(g_cmd_count - 1) = value
+	s_cmd_strs(s_cmd_count - 1) = value
 	return
 
 #deffunc negi_lang_cmd_add_local_var int index, int scope_i, int tok_i
 
 	negi_lang_cmd_add_int cmd_local_var, index, tok_i
-	g_cmd_ys(g_cmd_count - 1) = scope_i
+	s_cmd_ys(s_cmd_count - 1) = scope_i
 	return
 
 // 否定演算の命令を追加する。 (!x ---> x == false)
@@ -1530,14 +1530,14 @@
 #deffunc negi_lang_gen_exp_ident int exp_i, int lval, \
 	local name, local tok_i, local local_i, local scope_i
 
-	assert g_exp_kinds(exp_i) == exp_ident
-	name = g_exp_strs(exp_i)
-	tok_i = g_exp_tok_is(exp_i)
+	assert s_exp_kinds(exp_i) == exp_ident
+	name = s_exp_strs(exp_i)
+	tok_i = s_exp_tok_is(exp_i)
 
 	negi_lang_local_find_var name, local_i
 	if local_i >= 0 {
-		scope_i = g_local_scope_is(local_i)
-		negi_lang_cmd_add_local_var g_local_indexes(local_i), scope_i, tok_i
+		scope_i = s_local_scope_is(local_i)
+		negi_lang_cmd_add_local_var s_local_indexes(local_i), scope_i, tok_i
 		if lval == false {
 			negi_lang_cmd_add cmd_cell_get, tok_i
 		}
@@ -1553,21 +1553,21 @@
 		return
 	}
 
-	negi_lang_cmd_add_err "未定義の変数を使用しています。", g_exp_tok_is(exp_i)
+	negi_lang_cmd_add_err "未定義の変数を使用しています。", s_exp_tok_is(exp_i)
 	return
 
 #deffunc negi_lang_gen_exp_array int exp_i, \
 	local subexp_l, local subexp_r, local exp_l, local exp_r, local len, local tok_i
 
-	assert g_exp_kinds(exp_i) == exp_array
-	subexp_l = g_exp_subexp_ls(exp_i)
-	subexp_r = g_exp_subexp_rs(exp_i)
+	assert s_exp_kinds(exp_i) == exp_array
+	subexp_l = s_exp_subexp_ls(exp_i)
+	subexp_r = s_exp_subexp_rs(exp_i)
 	len = subexp_r - subexp_l
-	tok_i = g_exp_tok_is(exp_i)
+	tok_i = s_exp_tok_is(exp_i)
 
 	negi_lang_cmd_add_int cmd_push_array, len, tok_i
 	repeat len
-		negi_lang_gen_exp g_subexp_exp_is(subexp_l + cnt)
+		negi_lang_gen_exp s_subexp_exp_is(subexp_l + cnt)
 		negi_lang_cmd_add_int cmd_op, op_array_push, tok_i
 	loop
 	return
@@ -1575,15 +1575,15 @@
 #deffunc negi_lang_gen_exp_call int exp_i, \
 	local subexp_l, local subexp_r, local len, local tok_i
 
-	assert g_exp_kinds(exp_i) == exp_call
-	subexp_l = g_exp_subexp_ls(exp_i)
-	subexp_r = g_exp_subexp_rs(exp_i)
+	assert s_exp_kinds(exp_i) == exp_call
+	subexp_l = s_exp_subexp_ls(exp_i)
+	subexp_r = s_exp_subexp_rs(exp_i)
 	len = subexp_r - subexp_l
-	tok_i = g_exp_tok_is(exp_i)
+	tok_i = s_exp_tok_is(exp_i)
 
-	negi_lang_gen_exp g_exp_exp_ls(exp_i)
+	negi_lang_gen_exp s_exp_exp_ls(exp_i)
 	repeat len
-		negi_lang_gen_exp g_subexp_exp_is(subexp_l + cnt)
+		negi_lang_gen_exp s_subexp_exp_is(subexp_l + cnt)
 	loop
 	negi_lang_cmd_add_int cmd_call, len, tok_i
 	return
@@ -1592,11 +1592,11 @@
 	local cond_exp_i, local then_exp_i, local else_exp_i, \
 	local else_label_i, local end_label_i, local tok_i
 
-	assert g_exp_kinds(exp_i) == exp_if
-	cond_exp_i = g_exp_exp_conds(exp_i)
-	then_exp_i = g_exp_exp_ls(exp_i)
-	else_exp_i = g_exp_exp_rs(exp_i)
-	tok_i = g_exp_tok_is(exp_i)
+	assert s_exp_kinds(exp_i) == exp_if
+	cond_exp_i = s_exp_exp_conds(exp_i)
+	then_exp_i = s_exp_exp_ls(exp_i)
+	else_exp_i = s_exp_exp_rs(exp_i)
+	tok_i = s_exp_tok_is(exp_i)
 
 	else_label_i = negi_lang_label_add()
 	end_label_i = negi_lang_label_add()
@@ -1623,10 +1623,10 @@
 	local cond_exp_i, local body_exp_i, \
 	local begin_label_i, local else_label_i, local tok_i
 
-	assert g_exp_kinds(exp_i) == exp_while
-	cond_exp_i = g_exp_exp_conds(exp_i)
-	body_exp_i = g_exp_exp_ls(exp_i)
-	tok_i = g_exp_tok_is(exp_i)
+	assert s_exp_kinds(exp_i) == exp_while
+	cond_exp_i = s_exp_exp_conds(exp_i)
+	body_exp_i = s_exp_exp_ls(exp_i)
+	tok_i = s_exp_tok_is(exp_i)
 	assert cond_exp_i != exp_i_none
 	assert body_exp_i != exp_i_none
 
@@ -1657,14 +1657,14 @@
 #deffunc negi_lang_gen_exp_break int exp_i, \
 	local break_label_i, local tok_i
 
-	assert g_exp_kinds(exp_i) == exp_break
-	tok_i = g_exp_tok_is(exp_i)
+	assert s_exp_kinds(exp_i) == exp_break
+	tok_i = s_exp_tok_is(exp_i)
 
-	if g_loop_count == 0 {
+	if s_loop_count == 0 {
 		negi_lang_cmd_add_err "ループの外側では break を使用できません。", tok_i
 		return
 	}
-	break_label_i = g_loop_breaks(g_loop_count - 1)
+	break_label_i = s_loop_breaks(s_loop_count - 1)
 
 	negi_lang_cmd_add_goto break_label_i, tok_i
 	return
@@ -1674,13 +1674,13 @@
 #deffunc negi_lang_gen_exp_op int exp_i, int lval, \
 	local op
 
-	assert g_exp_kinds(exp_i) == exp_op
-	op = g_exp_ints(exp_i)
+	assert s_exp_kinds(exp_i) == exp_op
+	op = s_exp_ints(exp_i)
 
 	if op == op_semi {
-		negi_lang_gen_exp g_exp_exp_ls(exp_i)
-		negi_lang_cmd_add cmd_pop, g_exp_tok_is(exp_i)
-		negi_lang_gen_exp g_exp_exp_rs(exp_i)
+		negi_lang_gen_exp s_exp_exp_ls(exp_i)
+		negi_lang_cmd_add cmd_pop, s_exp_tok_is(exp_i)
+		negi_lang_gen_exp s_exp_exp_rs(exp_i)
 		return
 	}
 	if op == op_set {
@@ -1692,58 +1692,58 @@
 		return
 	}
 
-	negi_lang_gen_exp g_exp_exp_ls(exp_i)
-	negi_lang_gen_exp g_exp_exp_rs(exp_i)
+	negi_lang_gen_exp s_exp_exp_ls(exp_i)
+	negi_lang_gen_exp s_exp_exp_rs(exp_i)
 
 	if op == op_ne {
 		// l != r ---> !(l == r)
-		negi_lang_cmd_add_int cmd_op, op_eq, g_exp_tok_is(exp_i)
-		negi_lang_cmd_add_negate g_exp_tok_is(exp_i)
+		negi_lang_cmd_add_int cmd_op, op_eq, s_exp_tok_is(exp_i)
+		negi_lang_cmd_add_negate s_exp_tok_is(exp_i)
 		return
 	}
 	if op == op_le {
 		// l <= r ---> !(r < l)
-		negi_lang_cmd_add cmd_swap, g_exp_tok_is(exp_i)
-		negi_lang_cmd_add_int cmd_op, op_lt, g_exp_tok_is(exp_i)
-		negi_lang_cmd_add_negate g_exp_tok_is(exp_i)
+		negi_lang_cmd_add cmd_swap, s_exp_tok_is(exp_i)
+		negi_lang_cmd_add_int cmd_op, op_lt, s_exp_tok_is(exp_i)
+		negi_lang_cmd_add_negate s_exp_tok_is(exp_i)
 		return
 	}
 	if op == op_gt {
 		// l > r ---> r < l
-		negi_lang_cmd_add cmd_swap, g_exp_tok_is(exp_i)
-		negi_lang_cmd_add_int cmd_op, op_lt, g_exp_tok_is(exp_i)
+		negi_lang_cmd_add cmd_swap, s_exp_tok_is(exp_i)
+		negi_lang_cmd_add_int cmd_op, op_lt, s_exp_tok_is(exp_i)
 		return
 	}
 	if op == op_ge {
 		// l >= r ---> !(l < r)
-		negi_lang_cmd_add_int cmd_op, op_lt, g_exp_tok_is(exp_i)
-		negi_lang_cmd_add_negate g_exp_tok_is(exp_i)
+		negi_lang_cmd_add_int cmd_op, op_lt, s_exp_tok_is(exp_i)
+		negi_lang_cmd_add_negate s_exp_tok_is(exp_i)
 		return
 	}
 	if op == op_index && lval {
-		negi_lang_cmd_add_int cmd_op, op_index_ref, g_exp_tok_is(exp_i)
+		negi_lang_cmd_add_int cmd_op, op_index_ref, s_exp_tok_is(exp_i)
 		return
 	}
 
-	negi_lang_cmd_add_int cmd_op, op, g_exp_tok_is(exp_i)
+	negi_lang_cmd_add_int cmd_op, op, s_exp_tok_is(exp_i)
 
 	return
 
 #deffunc negi_lang_gen_exp_set int exp_i
 
-	assert g_exp_kinds(exp_i) == exp_op && g_exp_ints(exp_i) == op_set
+	assert s_exp_kinds(exp_i) == exp_op && s_exp_ints(exp_i) == op_set
 
-	negi_lang_gen_lval g_exp_exp_ls(exp_i)
-	negi_lang_gen_exp g_exp_exp_rs(exp_i)
-	negi_lang_cmd_add cmd_cell_set, g_exp_tok_is(exp_i)
+	negi_lang_gen_lval s_exp_exp_ls(exp_i)
+	negi_lang_gen_exp s_exp_exp_rs(exp_i)
+	negi_lang_cmd_add cmd_cell_set, s_exp_tok_is(exp_i)
 	return
 
 #deffunc negi_lang_gen_exp_set_op int exp_i, \
 	local tok_i, local set_op, local op
 
-	assert g_exp_kinds(exp_i) == exp_op
-	set_op = g_exp_ints(exp_i)
-	tok_i = g_exp_tok_is(exp_i)
+	assert s_exp_kinds(exp_i) == exp_op
+	set_op = s_exp_ints(exp_i)
+	tok_i = s_exp_tok_is(exp_i)
 
 	op = op_err
 	if set_op == op_set_add { op = op_add }
@@ -1754,14 +1754,14 @@
 	assert op != op_err
 
 	// 左辺を計算して参照セルを得る。
-	negi_lang_gen_lval g_exp_exp_ls(exp_i)
+	negi_lang_gen_lval s_exp_exp_ls(exp_i)
 
 	// この参照セルは2回使うので複製する。2つ目は値に変換する。
 	negi_lang_cmd_add cmd_dup, tok_i
 	negi_lang_cmd_add cmd_cell_get, tok_i
 
 	// 右辺を計算して演算する。
-	negi_lang_gen_exp g_exp_exp_rs(exp_i)
+	negi_lang_gen_exp s_exp_exp_rs(exp_i)
 	negi_lang_cmd_add_int cmd_op, op, tok_i
 
 	// 参照セルに演算結果を代入する。
@@ -1771,18 +1771,18 @@
 #deffunc negi_lang_gen_exp_let int exp_i, \
 	local ident_tok_i, local ident, local index
 
-	assert g_exp_kinds(exp_i) == exp_let
-	ident_tok_i = g_exp_ints(exp_i)
+	assert s_exp_kinds(exp_i) == exp_let
+	ident_tok_i = s_exp_ints(exp_i)
 	ident = negi_lang_tok_text(ident_tok_i)
 
-	negi_lang_gen_exp g_exp_exp_rs(exp_i)
+	negi_lang_gen_exp s_exp_exp_rs(exp_i)
 
 	negi_lang_local_add_var ident, ident_tok_i
-	index = g_local_indexes(g_local_count - 1)
+	index = s_local_indexes(s_local_count - 1)
 
-	negi_lang_cmd_add_int cmd_local_var, index, g_exp_tok_is(exp_i)
-	negi_lang_cmd_add cmd_swap, g_exp_tok_is(exp_i)
-	negi_lang_cmd_add cmd_cell_set, g_exp_tok_is(exp_i)
+	negi_lang_cmd_add_int cmd_local_var, index, s_exp_tok_is(exp_i)
+	negi_lang_cmd_add cmd_swap, s_exp_tok_is(exp_i)
+	negi_lang_cmd_add cmd_cell_set, s_exp_tok_is(exp_i)
 	return
 
 #deffunc negi_lang_gen_exp_fun int exp_i, \
@@ -1790,11 +1790,11 @@
 	local scope_i, local index, local param_exp_i, \
 	local body_label_i, local return_label_i, local next_label_i, local fun_i
 
-	assert g_exp_kinds(exp_i) == exp_fun
-	body_exp_i = g_exp_exp_ls(exp_i)
-	subexp_l = g_exp_subexp_ls(exp_i)
-	subexp_r = g_exp_subexp_rs(exp_i)
-	tok_i = g_exp_tok_is(exp_i)
+	assert s_exp_kinds(exp_i) == exp_fun
+	body_exp_i = s_exp_exp_ls(exp_i)
+	subexp_l = s_exp_subexp_ls(exp_i)
+	subexp_r = s_exp_subexp_rs(exp_i)
+	tok_i = s_exp_tok_is(exp_i)
 
 	body_label_i = negi_lang_label_add()
 	next_label_i = negi_lang_label_add()
@@ -1806,19 +1806,19 @@
 	negi_lang_cmd_add_int cmd_label, body_label_i, tok_i
 
 	negi_lang_scope_push tok_i
-	scope_i = g_scope_current
+	scope_i = s_scope_current
 
 	// 仮引数リストを解析する
 	repeat subexp_r - subexp_l, subexp_l
-		param_exp_i = g_subexp_exp_is(cnt)
+		param_exp_i = s_subexp_exp_is(cnt)
 		index = cnt - subexp_l
 
-		if g_exp_kinds(param_exp_i) != exp_ident {
-			negi_lang_cmd_add_err "仮引数は識別子でなければいけません。", g_exp_tok_is(param_exp_i)
+		if s_exp_kinds(param_exp_i) != exp_ident {
+			negi_lang_cmd_add_err "仮引数は識別子でなければいけません。", s_exp_tok_is(param_exp_i)
 			continue
 		}
 
-		negi_lang_local_add_var g_exp_strs(param_exp_i), g_exp_tok_is(param_exp_i)
+		negi_lang_local_add_var s_exp_strs(param_exp_i), s_exp_tok_is(param_exp_i)
 	loop
 
 	// 関数本体を解析する。
@@ -1840,9 +1840,9 @@
 #deffunc negi_lang_gen_exp_return int exp_i, \
 	local exp_l, local tok_i
 
-	assert g_exp_kinds(exp_i) == exp_return
-	exp_l = g_exp_exp_ls(exp_i)
-	tok_i = g_exp_tok_is(exp_i)
+	assert s_exp_kinds(exp_i) == exp_return
+	exp_l = s_exp_exp_ls(exp_i)
+	tok_i = s_exp_tok_is(exp_i)
 
 	negi_lang_gen_exp exp_l
 	negi_lang_cmd_add cmd_return, tok_i
@@ -1854,99 +1854,99 @@
 
 	lval = true
 
-	if g_exp_kinds(exp_i) == exp_ident {
+	if s_exp_kinds(exp_i) == exp_ident {
 		negi_lang_gen_exp_ident exp_i, lval
 		return
 	}
-	if g_exp_kinds(exp_i) == exp_op && g_exp_ints(exp_i) == op_index {
+	if s_exp_kinds(exp_i) == exp_op && s_exp_ints(exp_i) == op_index {
 		negi_lang_gen_exp_op exp_i, lval
 		return
 	}
 
-	negi_lang_cmd_add_err "左辺値が必要です。", g_exp_tok_is(exp_i)
+	negi_lang_cmd_add_err "左辺値が必要です。", s_exp_tok_is(exp_i)
 	return
 
 // 式を計算するコードを生成する。
 #deffunc negi_lang_gen_exp int exp_i
 
-	if g_exp_kinds(exp_i) == exp_int {
-		negi_lang_cmd_add_int cmd_push_int, g_exp_ints(exp_i), g_exp_tok_is(exp_i)
+	if s_exp_kinds(exp_i) == exp_int {
+		negi_lang_cmd_add_int cmd_push_int, s_exp_ints(exp_i), s_exp_tok_is(exp_i)
 		return
 	}
-	if g_exp_kinds(exp_i) == exp_str {
-		negi_lang_cmd_add_str cmd_push_str, g_exp_strs(exp_i), g_exp_tok_is(exp_i)
+	if s_exp_kinds(exp_i) == exp_str {
+		negi_lang_cmd_add_str cmd_push_str, s_exp_strs(exp_i), s_exp_tok_is(exp_i)
 		return
 	}
-	if g_exp_kinds(exp_i) == exp_array {
+	if s_exp_kinds(exp_i) == exp_array {
 		negi_lang_gen_exp_array exp_i
 		return
 	}
-	if g_exp_kinds(exp_i) == exp_ident {
+	if s_exp_kinds(exp_i) == exp_ident {
 		negi_lang_gen_exp_ident exp_i
 		return
 	}
-	if g_exp_kinds(exp_i) == exp_call {
+	if s_exp_kinds(exp_i) == exp_call {
 		negi_lang_gen_exp_call exp_i
 		return
 	}
-	if g_exp_kinds(exp_i) == exp_op {
+	if s_exp_kinds(exp_i) == exp_op {
 		negi_lang_gen_exp_op exp_i, false
 		return
 	}
-	if g_exp_kinds(exp_i) == exp_let {
+	if s_exp_kinds(exp_i) == exp_let {
 		negi_lang_gen_exp_let exp_i
 		return
 	}
-	if g_exp_kinds(exp_i) == exp_if {
+	if s_exp_kinds(exp_i) == exp_if {
 		negi_lang_gen_exp_if exp_i
 		return
 	}
-	if g_exp_kinds(exp_i) == exp_while {
+	if s_exp_kinds(exp_i) == exp_while {
 		negi_lang_gen_exp_while exp_i
 		return
 	}
-	if g_exp_kinds(exp_i) == exp_break {
+	if s_exp_kinds(exp_i) == exp_break {
 		negi_lang_gen_exp_break exp_i
 		return
 	}
-	if g_exp_kinds(exp_i) == exp_fun {
+	if s_exp_kinds(exp_i) == exp_fun {
 		negi_lang_gen_exp_fun exp_i
 		return
 	}
-	if g_exp_kinds(exp_i) == exp_return {
+	if s_exp_kinds(exp_i) == exp_return {
 		negi_lang_gen_exp_return exp_i
 		return
 	}
-	if g_exp_kinds(exp_i) == exp_err {
-		negi_lang_cmd_add_str cmd_err, g_exp_strs(exp_i), g_exp_tok_is(exp_i)
+	if s_exp_kinds(exp_i) == exp_err {
+		negi_lang_cmd_add_str cmd_err, s_exp_strs(exp_i), s_exp_tok_is(exp_i)
 		return
 	}
-	d_trace "kind = " + g_exp_kinds(exp_i)
+	d_trace "kind = " + s_exp_kinds(exp_i)
 	failwith "unknown expression kind"
 
 // コード生成を実行する。
 #deffunc negi_lang_gen \
 	local main_label_i
 
-	assert g_exp_i_root != exp_i_none
+	assert s_exp_i_root != exp_i_none
 
 	// 先頭にラベルを置く。
 	main_label_i = negi_lang_label_add()
 	negi_lang_cmd_add_int cmd_label, main_label_i, 0
 
 	// コード生成。
-	negi_lang_gen_exp g_exp_i_root
+	negi_lang_gen_exp s_exp_i_root
 
 	// スタックにある値を終了コードとして終了する命令を末尾に追加する。
-	negi_lang_cmd_add cmd_exit, g_tok_count - 1
+	negi_lang_cmd_add cmd_exit, s_tok_count - 1
 
 	// トップレベルに対応する関数を登録する。
-	g_fun_i_main = negi_lang_fun_add_closure(scope_i_global, main_label_i)
+	s_fun_i_main = negi_lang_fun_add_closure(scope_i_global, main_label_i)
 
 	// ラベルを解決する。
-	repeat g_cmd_count
-		if g_cmd_kinds(cnt) == cmd_label {
-			negi_lang_label_set g_cmd_xs(cnt), cnt
+	repeat s_cmd_count
+		if s_cmd_kinds(cnt) == cmd_label {
+			negi_lang_label_set s_cmd_xs(cnt), cnt
 		}
 	loop
 	return
@@ -1966,24 +1966,24 @@
 
 	d_trace "push ty=" + ty + " val=" + val
 
-	if g_cell_i_stack_end >= g_cell_i_stack_max {
+	if s_cell_i_stack_end >= s_cell_i_stack_max {
 		// FIXME: エラー箇所を報告する
 		negi_lang_eval_abort "STACK OVERFLOW", 0
 		return
 	}
 
-	g_cell_tys(g_cell_i_stack_end) = ty
-	g_cell_vals(g_cell_i_stack_end) = val
-	g_cell_i_stack_end++
+	s_cell_tys(s_cell_i_stack_end) = ty
+	s_cell_vals(s_cell_i_stack_end) = val
+	s_cell_i_stack_end++
 	return
 
 // スタックから値を取り出す。
 #deffunc negi_lang_stack_pop var out_ty, var out_val
 
-	assert g_cell_i_stack_end >= 1
-	g_cell_i_stack_end--
-	out_ty = g_cell_tys(g_cell_i_stack_end)
-	out_val = g_cell_vals(g_cell_i_stack_end)
+	assert s_cell_i_stack_end >= 1
+	s_cell_i_stack_end--
+	out_ty = s_cell_tys(s_cell_i_stack_end)
+	out_val = s_cell_vals(s_cell_i_stack_end)
 
 	d_trace "pop ty=" + out_ty + " val=" + out_val
 	return
@@ -1994,15 +1994,15 @@
 
 #deffunc negi_lang_heap_alloc int count, var out_cell_l, var out_cell_r
 
-	if g_cell_i_heap_end + count > g_cell_count {
+	if s_cell_i_heap_end + count > s_cell_count {
 		// FIXME: ヒープを自動で拡張する
 		negi_lang_eval_abort "OUT OF MEMORY", 0
 		return
 	}
 
-	out_cell_l = g_cell_i_heap_end
-	out_cell_r = g_cell_i_heap_end + count
-	g_cell_i_heap_end += count
+	out_cell_l = s_cell_i_heap_end
+	out_cell_r = s_cell_i_heap_end + count
+	s_cell_i_heap_end += count
 	return
 
 // -----------------------------------------------
@@ -2011,17 +2011,17 @@
 
 #deffunc negi_lang_frame_push int cmd_i, int env_i, int tok_i
 
-	g_frame_cmd_is(g_frame_count) = cmd_i
-	g_frame_env_is(g_frame_count) = env_i
-	g_frame_tok_is(g_frame_count) = tok_i
-	g_frame_count++
+	s_frame_cmd_is(s_frame_count) = cmd_i
+	s_frame_env_is(s_frame_count) = env_i
+	s_frame_tok_is(s_frame_count) = tok_i
+	s_frame_count++
 	return
 
 #defcfunc negi_lang_frame_pop
 
-	assert g_frame_count >= 1
-	g_frame_count--
-	return g_frame_cmd_is(g_frame_count)
+	assert s_frame_count >= 1
+	s_frame_count--
+	return s_frame_cmd_is(s_frame_count)
 
 // -----------------------------------------------
 // 文字列リスト
@@ -2030,9 +2030,9 @@
 // 文字列リストに追加して、その番号を返す。
 #defcfunc negi_lang_str_add str value
 
-	g_strs(g_str_count) = value
-	g_str_count++
-	return g_str_count - 1
+	s_strs(s_str_count) = value
+	s_str_count++
+	return s_str_count - 1
 
 // -----------------------------------------------
 // 配列リスト
@@ -2047,11 +2047,11 @@
 
 	negi_lang_heap_alloc capacity, cell_l, cell_r
 
-	g_array_lens(g_array_count) = len
-	g_array_cell_ls(g_array_count) = cell_l
-	g_array_cell_rs(g_array_count) = cell_r
-	g_array_count++
-	return g_array_count - 1
+	s_array_lens(s_array_count) = len
+	s_array_cell_ls(s_array_count) = cell_l
+	s_array_cell_rs(s_array_count) = cell_r
+	s_array_count++
+	return s_array_count - 1
 
 // 配列のキャパシティを new_len 以上にする。
 // 現在のキャパシティでは足りなければ、新しい領域を確保して移動する。
@@ -2060,24 +2060,24 @@
 	local current_len, local current_cell_l, local current_cell_r, \
 	local new_capacity, local new_cell_l, local new_cell_r
 
-	current_cell_l = g_array_cell_ls(array_i)
-	current_cell_r = g_array_cell_rs(array_i)
+	current_cell_l = s_array_cell_ls(array_i)
+	current_cell_r = s_array_cell_rs(array_i)
 
 	if new_len <= current_cell_r - current_cell_l {
 		return
 	}
 
-	assert g_array_lens(array_i) <= new_len
+	assert s_array_lens(array_i) <= new_len
 
 	new_capacity = new_len + (new_len / 2)
 	negi_lang_heap_alloc new_capacity, new_cell_l, new_cell_r
 
-	g_array_cell_ls(array_i) = new_cell_l
-	g_array_cell_rs(array_i) = new_cell_r
+	s_array_cell_ls(array_i) = new_cell_l
+	s_array_cell_rs(array_i) = new_cell_r
 
-	repeat g_array_lens(array_i)
-		g_cell_tys(new_cell_l + cnt) = g_cell_tys(current_cell_l + cnt)
-		g_cell_vals(new_cell_l + cnt) = g_cell_vals(current_cell_l + cnt)
+	repeat s_array_lens(array_i)
+		s_cell_tys(new_cell_l + cnt) = s_cell_tys(current_cell_l + cnt)
+		s_cell_vals(new_cell_l + cnt) = s_cell_vals(current_cell_l + cnt)
 	loop
 	return
 
@@ -2087,11 +2087,11 @@
 	local index
 
 	assert array_ty == ty_array
-	index = g_array_lens(array_i)
+	index = s_array_lens(array_i)
 
 	negi_lang_array_reserve array_ty, array_i, index + 1
 
-	g_array_lens(array_i)++
+	s_array_lens(array_i)++
 	negi_lang_array_set array_ty, array_i, index, elem_ty, elem_val
 	return
 
@@ -2099,14 +2099,14 @@
 #defcfunc negi_lang_array_ref int array_ty, int array_i, int index
 
 	assert array_ty == ty_array
-	assert 0 <= array_i && array_i < g_array_count
+	assert 0 <= array_i && array_i < s_array_count
 
-	if (0 <= index && index < g_array_lens(array_i)) == false {
+	if (0 <= index && index < s_array_lens(array_i)) == false {
 		negi_lang_eval_abort "配列の要素番号が不正です。", 0 // FIXME: 位置情報
 		return 0
 	}
 
-	return g_array_cell_ls(array_i) + index
+	return s_array_cell_ls(array_i) + index
 
 // 配列の index 番目の要素を取得する。
 #deffunc negi_lang_array_get \
@@ -2114,8 +2114,8 @@
 	local cell_i
 
 	cell_i = negi_lang_array_ref(array_ty, array_i, index)
-	out_ty = g_cell_tys(cell_i)
-	out_val = g_cell_vals(cell_i)
+	out_ty = s_cell_tys(cell_i)
+	out_val = s_cell_vals(cell_i)
 	return
 
 // 配列の index 番目の要素を設定する。
@@ -2124,8 +2124,8 @@
 	local cell_i
 
 	cell_i = negi_lang_array_ref(array_ty, array_i, index)
-	g_cell_tys(cell_i) = item_ty
-	g_cell_vals(cell_i) = item_val
+	s_cell_tys(cell_i) = item_ty
+	s_cell_vals(cell_i) = item_val
 	return
 
 // -----------------------------------------------
@@ -2135,29 +2135,29 @@
 #defcfunc negi_lang_env_add int parent_env_i, int fun_i, \
 	local array_i, local array_len, local scope_i
 
-	scope_i = g_fun_scope_is(fun_i)
-	array_len = g_scope_lens(scope_i)
+	scope_i = s_fun_scope_is(fun_i)
+	array_len = s_scope_lens(scope_i)
 	array_i = negi_lang_array_add(array_len, array_len)
 
-	g_env_parents(g_env_count) = parent_env_i
-	g_env_scope_is(g_env_count) = scope_i
-	g_env_array_is(g_env_count) = array_i
-	g_env_count++
-	return g_env_count - 1
+	s_env_parents(s_env_count) = parent_env_i
+	s_env_scope_is(s_env_count) = scope_i
+	s_env_array_is(s_env_count) = array_i
+	s_env_count++
+	return s_env_count - 1
 
 #defcfunc negi_lang_env_ref int source_env_i, int index, int scope_i, \
 	local array_i, local env_i
 
 	env_i = source_env_i
 	repeat
-		assert 0 <= env_i && env_i < g_env_count
-		if g_env_scope_is(env_i) == scope_i { break }
+		assert 0 <= env_i && env_i < s_env_count
+		if s_env_scope_is(env_i) == scope_i { break }
 
-		assert env_i != g_env_parents(env_i)
-		env_i = g_env_parents(env_i)
+		assert env_i != s_env_parents(env_i)
+		env_i = s_env_parents(env_i)
 	loop
 
-	array_i = g_env_array_is(env_i)
+	array_i = s_env_array_is(env_i)
 	return negi_lang_array_ref(ty_array, array_i, index)
 
 // -----------------------------------------------
@@ -2166,12 +2166,12 @@
 
 #defcfunc negi_lang_closure_add int fun_i, int env_i
 
-	assert g_fun_kinds(fun_i) == fun_kind_closure
+	assert s_fun_kinds(fun_i) == fun_kind_closure
 
-	g_closure_fun_is(g_closure_count) = fun_i
-	g_closure_env_is(g_closure_count) = env_i
-	g_closure_count++
-	return g_closure_count - 1
+	s_closure_fun_is(s_closure_count) = fun_i
+	s_closure_env_is(s_closure_count) = env_i
+	s_closure_count++
+	return s_closure_count - 1
 
 // -----------------------------------------------
 // 評価
@@ -2180,26 +2180,26 @@
 // 異常終了する。
 #deffunc negi_lang_eval_abort str message, int tok_i
 
-	negi_lang_err_add message, g_tok_src_ls(tok_i), g_tok_src_rs(tok_i)
+	negi_lang_err_add message, s_tok_src_ls(tok_i), s_tok_src_rs(tok_i)
 
 	// 終了コード 1 で停止させる。
 	negi_lang_stack_push ty_int, 1
-	g_pc = g_cmd_count - 1
-	assert g_cmd_kinds(g_pc) == cmd_exit
+	s_pc = s_cmd_count - 1
+	assert s_cmd_kinds(s_pc) == cmd_exit
 	return
 
 // エラー命令を処理する。
 #deffunc negi_lang_eval_err int cmd_i
 
-	assert g_cmd_kinds(cmd_i) == cmd_err
-	negi_lang_eval_abort g_cmd_strs(cmd_i), g_cmd_tok_is(cmd_i)
+	assert s_cmd_kinds(cmd_i) == cmd_err
+	negi_lang_eval_abort s_cmd_strs(cmd_i), s_cmd_tok_is(cmd_i)
 	return
 
 #deffunc negi_lang_eval_push_array int cmd_i, \
 	local array_i, local len, local elem_ty, local elem_val
 
-	assert g_cmd_kinds(cmd_i) == cmd_push_array
-	len = g_cmd_xs(cmd_i)
+	assert s_cmd_kinds(cmd_i) == cmd_push_array
+	len = s_cmd_xs(cmd_i)
 
 	array_i = negi_lang_array_add(0, len)
 	negi_lang_stack_push ty_array, array_i
@@ -2208,8 +2208,8 @@
 #deffunc negi_lang_eval_push_closure int cmd_i, \
 	local fun_i, local env_i, local closure_i
 
-	fun_i = g_cmd_xs(cmd_i)
-	env_i = g_frame_env_is(g_frame_count - 1)
+	fun_i = s_cmd_xs(cmd_i)
+	env_i = s_frame_env_is(s_frame_count - 1)
 	closure_i = negi_lang_closure_add(fun_i, env_i)
 
 	negi_lang_stack_push ty_closure, closure_i
@@ -2218,11 +2218,11 @@
 #deffunc negi_lang_eval_local_var int cmd_i, \
 	local index, local scope_i, local env_i
 
-	assert g_cmd_kinds(cmd_i) == cmd_local_var
-	index = g_cmd_xs(cmd_i)
-	scope_i = g_cmd_ys(cmd_i)
+	assert s_cmd_kinds(cmd_i) == cmd_local_var
+	index = s_cmd_xs(cmd_i)
+	scope_i = s_cmd_ys(cmd_i)
 
-	env_i = g_frame_env_is(g_frame_count - 1)
+	env_i = s_frame_env_is(s_frame_count - 1)
 
 	negi_lang_stack_push ty_cell, negi_lang_env_ref(env_i, index, scope_i)
 	return
@@ -2230,31 +2230,31 @@
 #deffunc negi_lang_eval_cell_get int cmd_i, \
 	local cell_ty, local cell_val, local item_ty, local item_val
 
-	assert g_cmd_kinds(cmd_i) == cmd_cell_get
+	assert s_cmd_kinds(cmd_i) == cmd_cell_get
 
 	negi_lang_stack_pop cell_ty, cell_val
 	if cell_ty != ty_cell {
-		negi_lang_eval_abort "左辺値が必要です。", g_cmd_tok_is(cmd_i)
+		negi_lang_eval_abort "左辺値が必要です。", s_cmd_tok_is(cmd_i)
 		return
 	}
 
-	negi_lang_stack_push g_cell_tys(cell_val), g_cell_vals(cell_val)
+	negi_lang_stack_push s_cell_tys(cell_val), s_cell_vals(cell_val)
 	return
 
 #deffunc negi_lang_eval_cell_set int cmd_i, \
 	local cell_ty, local cell_val, local item_ty, local item_val
 
-	assert g_cmd_kinds(cmd_i) == cmd_cell_set
+	assert s_cmd_kinds(cmd_i) == cmd_cell_set
 
 	negi_lang_stack_pop item_ty, item_val
 	negi_lang_stack_pop cell_ty, cell_val
 
 	if cell_ty != ty_cell {
-		negi_lang_eval_abort "左辺値が必要です。", g_cmd_tok_is(cmd_i)
+		negi_lang_eval_abort "左辺値が必要です。", s_cmd_tok_is(cmd_i)
 		return
 	}
-	g_cell_tys(cell_val) = item_ty
-	g_cell_vals(cell_val) = item_val
+	s_cell_tys(cell_val) = item_ty
+	s_cell_vals(cell_val) = item_val
 
 	negi_lang_stack_push item_ty, item_val
 	return
@@ -2262,18 +2262,18 @@
 #deffunc negi_lang_eval_jump_unless int cmd_i, \
 	local cond_ty, local cond_val, local label_i
 
-	assert g_cmd_kinds(cmd_i) == cmd_jump_unless
-	label_i = g_cmd_xs(cmd_i)
+	assert s_cmd_kinds(cmd_i) == cmd_jump_unless
+	label_i = s_cmd_xs(cmd_i)
 
 	negi_lang_stack_pop cond_ty, cond_val
 	if cond_ty != ty_int {
-		negi_lang_eval_abort "条件の型が不正です。", g_cmd_tok_is(cmd_i)
+		negi_lang_eval_abort "条件の型が不正です。", s_cmd_tok_is(cmd_i)
 		return
 	}
 
 	if cond_val == false {
-		g_pc = g_label_cmd_is(label_i)
-		assert g_cmd_kinds(g_pc) == cmd_label
+		s_pc = s_label_cmd_is(label_i)
+		assert s_cmd_kinds(s_pc) == cmd_label
 	}
 	return
 
@@ -2281,7 +2281,7 @@
 #deffunc negi_lang_eval_swap int cmd_i, \
 	local val_l, local val_r, local ty_l, local ty_r
 
-	assert g_cmd_kinds(cmd_i) == cmd_swap
+	assert s_cmd_kinds(cmd_i) == cmd_swap
 	negi_lang_stack_pop ty_l, val_l
 	negi_lang_stack_pop ty_r, val_r
 	negi_lang_stack_push ty_l, val_l
@@ -2291,7 +2291,7 @@
 #deffunc negi_lang_eval_dup int cmd_i, \
 	local ty, local val
 
-	assert g_cmd_kinds(cmd_i) == cmd_dup
+	assert s_cmd_kinds(cmd_i) == cmd_dup
 	negi_lang_stack_pop ty, val
 	negi_lang_stack_push ty, val
 	negi_lang_stack_push ty, val
@@ -2302,9 +2302,9 @@
 	local fun_ty, local fun_val, local arg_tys, local arg_vals, \
 	local fun_i, local closure_i, local body_label_i, local array_i, local parent_env_i, local env_i
 
-	assert g_cmd_kinds(cmd_i) == cmd_call
-	len = g_cmd_xs(cmd_i)
-	call_tok_i = g_cmd_tok_is(cmd_i)
+	assert s_cmd_kinds(cmd_i) == cmd_call
+	len = s_cmd_xs(cmd_i)
+	call_tok_i = s_cmd_tok_is(cmd_i)
 
 	dim arg_tys, len
 	dim arg_vals, len
@@ -2322,23 +2322,23 @@
 	// クロージャを呼び出す。
 	if fun_ty == ty_closure {
 		closure_i = fun_val
-		fun_i = g_closure_fun_is(closure_i)
-		parent_env_i = g_closure_env_is(closure_i)
-		body_label_i = g_fun_label_is(fun_i)
+		fun_i = s_closure_fun_is(closure_i)
+		parent_env_i = s_closure_env_is(closure_i)
+		body_label_i = s_fun_label_is(fun_i)
 
-		assert g_fun_kinds(fun_i) == fun_kind_closure
+		assert s_fun_kinds(fun_i) == fun_kind_closure
 
 		// 環境を生成して、実引数を割り当てる。
 		env_i = negi_lang_env_add(parent_env_i, fun_i)
 
-		array_i = g_env_array_is(env_i)
+		array_i = s_env_array_is(env_i)
 		repeat len
 			if cnt >= len { break }
 			negi_lang_array_set ty_array, array_i, cnt, arg_tys(cnt), arg_vals(cnt)
 		loop
 
-		negi_lang_frame_push g_pc, env_i, call_tok_i
-		g_pc = g_label_cmd_is(body_label_i)
+		negi_lang_frame_push s_pc, env_i, call_tok_i
+		s_pc = s_label_cmd_is(body_label_i)
 		return
 	}
 
@@ -2352,7 +2352,7 @@
 			negi_lang_eval_abort "array_len の第1引数は配列でなければいけません。", call_tok_i
 			return
 		}
-		negi_lang_stack_push ty_int, g_array_lens(arg_vals(0))
+		negi_lang_stack_push ty_int, s_array_lens(arg_vals(0))
 		return
 	}
 	if fun_val == 1 {
@@ -2368,8 +2368,8 @@
 
 #deffunc negi_lang_eval_return int cmd_i
 
-	assert g_cmd_kinds(cmd_i) == cmd_return
-	g_pc = negi_lang_frame_pop()
+	assert s_cmd_kinds(cmd_i) == cmd_return
+	s_pc = negi_lang_frame_pop()
 	return
 
 // スタック上の2つの値に演算を適用し、結果をスタックに置く。
@@ -2391,10 +2391,10 @@
 			return
 		}
 		if ty == ty_str {
-			negi_lang_stack_push ty_int, g_strs(val_l) == g_strs(val_r)
+			negi_lang_stack_push ty_int, s_strs(val_l) == s_strs(val_r)
 			return
 		}
-		negi_lang_eval_abort "type error", g_cmd_tok_is(cmd_i)
+		negi_lang_eval_abort "type error", s_cmd_tok_is(cmd_i)
 		return
 	}
 	assert op != op_ne
@@ -2408,10 +2408,10 @@
 			return
 		}
 		if ty == ty_str {
-			negi_lang_stack_push ty_int, (g_strs(val_l) != g_strs(val_r)) < 0
+			negi_lang_stack_push ty_int, (s_strs(val_l) != s_strs(val_r)) < 0
 			return
 		}
-		negi_lang_eval_abort "type error", g_cmd_tok_is(cmd_i)
+		negi_lang_eval_abort "type error", s_cmd_tok_is(cmd_i)
 		return
 	}
 	assert op != op_le
@@ -2421,7 +2421,7 @@
 	if op == op_index {
 		if ty == ty_str && ty_r == ty_int {
 			// FIXME: オーバーフローエラーを検出する
-			negi_lang_stack_push ty_int, peek(g_strs(val_l), val_r)
+			negi_lang_stack_push ty_int, peek(s_strs(val_l), val_r)
 			return
 		}
 		if ty == ty_array && ty_r == ty_int {
@@ -2429,7 +2429,7 @@
 			negi_lang_stack_push ty_t, val_t
 			return
 		}
-		negi_lang_eval_abort "type error", g_cmd_tok_is(cmd_i)
+		negi_lang_eval_abort "type error", s_cmd_tok_is(cmd_i)
 		return
 	}
 	if op == op_index_ref {
@@ -2437,7 +2437,7 @@
 			negi_lang_stack_push ty_cell, negi_lang_array_ref(ty, val_l, val_r)
 			return
 		}
-		negi_lang_eval_abort "type error", g_cmd_tok_is(cmd_i)
+		negi_lang_eval_abort "type error", s_cmd_tok_is(cmd_i)
 		return
 	}
 	if op == op_array_push {
@@ -2448,7 +2448,7 @@
 	}
 
 	if ty != ty_r {
-		negi_lang_eval_abort "type error", g_cmd_tok_is(cmd_i)
+		negi_lang_eval_abort "type error", s_cmd_tok_is(cmd_i)
 		return
 	}
 
@@ -2458,11 +2458,11 @@
 			return
 		}
 		if ty == ty_str {
-			val_l = negi_lang_str_add(g_strs(val_l) + g_strs(val_r))
+			val_l = negi_lang_str_add(s_strs(val_l) + s_strs(val_r))
 			negi_lang_stack_push ty_str, val_l
 			return
 		}
-		negi_lang_eval_abort "type error", g_cmd_tok_is(cmd_i)
+		negi_lang_eval_abort "type error", s_cmd_tok_is(cmd_i)
 		return
 	}
 	if op == op_sub {
@@ -2470,7 +2470,7 @@
 			negi_lang_stack_push ty_int, val_l - val_r
 			return
 		}
-		negi_lang_eval_abort "type error", g_cmd_tok_is(cmd_i)
+		negi_lang_eval_abort "type error", s_cmd_tok_is(cmd_i)
 		return
 	}
 	if op == op_mul {
@@ -2478,7 +2478,7 @@
 			negi_lang_stack_push ty_int, val_l * val_r
 			return
 		}
-		negi_lang_eval_abort "type error", g_cmd_tok_is(cmd_i)
+		negi_lang_eval_abort "type error", s_cmd_tok_is(cmd_i)
 		return
 	}
 	if op == op_div {
@@ -2486,7 +2486,7 @@
 			negi_lang_stack_push ty_int, val_l / val_r
 			return
 		}
-		negi_lang_eval_abort "type error", g_cmd_tok_is(cmd_i)
+		negi_lang_eval_abort "type error", s_cmd_tok_is(cmd_i)
 		return
 	}
 	if op == op_mod {
@@ -2494,7 +2494,7 @@
 			negi_lang_stack_push ty_int, val_l \ val_r
 			return
 		}
-		negi_lang_eval_abort "type error", g_cmd_tok_is(cmd_i)
+		negi_lang_eval_abort "type error", s_cmd_tok_is(cmd_i)
 		return
 	}
 
@@ -2507,87 +2507,87 @@
 	local cmd_i, local ty, local val
 
 	repeat
-		cmd_i = g_pc
-		g_pc++
+		cmd_i = s_pc
+		s_pc++
 
-		if g_cmd_kinds(cmd_i) == cmd_push_int {
-			negi_lang_stack_push ty_int, g_cmd_xs(cmd_i)
+		if s_cmd_kinds(cmd_i) == cmd_push_int {
+			negi_lang_stack_push ty_int, s_cmd_xs(cmd_i)
 			continue
 		}
-		if g_cmd_kinds(cmd_i) == cmd_push_str {
-			negi_lang_stack_push ty_str, negi_lang_str_add(g_cmd_strs(cmd_i))
+		if s_cmd_kinds(cmd_i) == cmd_push_str {
+			negi_lang_stack_push ty_str, negi_lang_str_add(s_cmd_strs(cmd_i))
 			continue
 		}
-		if g_cmd_kinds(cmd_i) == cmd_push_array {
+		if s_cmd_kinds(cmd_i) == cmd_push_array {
 			negi_lang_eval_push_array cmd_i
 			continue
 		}
-		if g_cmd_kinds(cmd_i) == cmd_push_fun {
-			negi_lang_stack_push ty_fun, g_cmd_xs(cmd_i)
+		if s_cmd_kinds(cmd_i) == cmd_push_fun {
+			negi_lang_stack_push ty_fun, s_cmd_xs(cmd_i)
 			continue
 		}
-		if g_cmd_kinds(cmd_i) == cmd_push_closure {
+		if s_cmd_kinds(cmd_i) == cmd_push_closure {
 			negi_lang_eval_push_closure cmd_i
 			continue
 		}
-		if g_cmd_kinds(cmd_i) == cmd_local_var {
+		if s_cmd_kinds(cmd_i) == cmd_local_var {
 			negi_lang_eval_local_var cmd_i
 			continue
 		}
-		if g_cmd_kinds(cmd_i) == cmd_cell_get {
+		if s_cmd_kinds(cmd_i) == cmd_cell_get {
 			negi_lang_eval_cell_get cmd_i
 			continue
 		}
-		if g_cmd_kinds(cmd_i) == cmd_cell_set {
+		if s_cmd_kinds(cmd_i) == cmd_cell_set {
 			negi_lang_eval_cell_set cmd_i
 			continue
 		}
-		if g_cmd_kinds(cmd_i) == cmd_jump_unless {
+		if s_cmd_kinds(cmd_i) == cmd_jump_unless {
 			negi_lang_eval_jump_unless cmd_i
 			continue
 		}
-		if g_cmd_kinds(cmd_i) == cmd_pop {
+		if s_cmd_kinds(cmd_i) == cmd_pop {
 			negi_lang_stack_pop ty, val
 			continue
 		}
-		if g_cmd_kinds(cmd_i) == cmd_swap {
+		if s_cmd_kinds(cmd_i) == cmd_swap {
 			negi_lang_eval_swap cmd_i
 			continue
 		}
-		if g_cmd_kinds(cmd_i) == cmd_dup {
+		if s_cmd_kinds(cmd_i) == cmd_dup {
 			negi_lang_eval_dup cmd_i
 			continue
 		}
-		if g_cmd_kinds(cmd_i) == cmd_call {
+		if s_cmd_kinds(cmd_i) == cmd_call {
 			negi_lang_eval_call cmd_i
 			continue
 		}
-		if g_cmd_kinds(cmd_i) == cmd_return {
+		if s_cmd_kinds(cmd_i) == cmd_return {
 			negi_lang_eval_return cmd_i
 			continue
 		}
-		if g_cmd_kinds(cmd_i) == cmd_op {
-			negi_lang_eval_op cmd_i, g_cmd_xs(cmd_i)
+		if s_cmd_kinds(cmd_i) == cmd_op {
+			negi_lang_eval_op cmd_i, s_cmd_xs(cmd_i)
 			continue
 		}
-		if g_cmd_kinds(cmd_i) == cmd_err {
+		if s_cmd_kinds(cmd_i) == cmd_err {
 			negi_lang_eval_err cmd_i
 			continue
 		}
-		if g_cmd_kinds(cmd_i) == cmd_exit {
+		if s_cmd_kinds(cmd_i) == cmd_exit {
 			// スタックの値を終了コードとする。
-			negi_lang_stack_pop ty, g_eval_exit
+			negi_lang_stack_pop ty, s_eval_exit
 			if ty != ty_int {
-				negi_lang_eval_abort "計算結果は整数値でなければいけません。", g_cmd_tok_is(cmd_i)
+				negi_lang_eval_abort "計算結果は整数値でなければいけません。", s_cmd_tok_is(cmd_i)
 				continue
 			}
 			break
 		}
-		if g_cmd_kinds(cmd_i) == cmd_label {
+		if s_cmd_kinds(cmd_i) == cmd_label {
 			continue
 		}
 
-		d_trace "cmd_kind = " + g_cmd_kinds(cmd_i)
+		d_trace "cmd_kind = " + s_cmd_kinds(cmd_i)
 		failwith "Unknown cmd_kind"
 	loop
 	return
@@ -2595,14 +2595,14 @@
 #deffunc negi_lang_eval \
 	local global_var_count, local array_i, local exit_cmd_i
 
-	assert g_cmd_count != 0
+	assert s_cmd_count != 0
 
-	exit_cmd_i = g_cmd_count - 1
-	assert g_cmd_kinds(exit_cmd_i) == cmd_exit
+	exit_cmd_i = s_cmd_count - 1
+	assert s_cmd_kinds(exit_cmd_i) == cmd_exit
 
 	// グローバル環境を生成する。
-	g_env_i_global = negi_lang_env_add(-1, g_fun_i_main)
-	negi_lang_frame_push exit_cmd_i, g_env_i_global, 0
+	s_env_i_global = negi_lang_env_add(-1, s_fun_i_main)
+	negi_lang_frame_push exit_cmd_i, s_env_i_global, 0
 
 	negi_lang_eval_main
 	return
@@ -2619,7 +2619,7 @@
 	negi_lang_parse
 	negi_lang_gen
 	negi_lang_eval
-	out_exit_code = g_eval_exit
+	out_exit_code = s_eval_exit
 	return
 
 #global
