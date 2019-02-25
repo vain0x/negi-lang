@@ -1400,7 +1400,7 @@
 	s_local_len = 0
 	return
 
-#deffunc negi_lang_local_add_var str ident, int tok_i
+#defcfunc negi_lang_local_add_var str ident, int tok_i
 
 	s_scope_lens(s_scope_current)++
 
@@ -1409,7 +1409,7 @@
 	s_local_idents(s_local_len) = ident
 	s_local_tok_is(s_local_len) = tok_i
 	s_local_len++
-	return
+	return s_local_len - 1
 
 #deffunc negi_lang_local_find_var str ident, var out_index, \
 	local scope_i
@@ -1797,7 +1797,7 @@
 	return
 
 #deffunc negi_lang_gen_exp_let int exp_i, \
-	local ident_tok_i, local ident, local index
+	local ident_tok_i, local ident, local local_i
 
 	assert s_exp_kinds(exp_i) == exp_let
 	ident_tok_i = s_exp_ints(exp_i)
@@ -1805,10 +1805,8 @@
 
 	negi_lang_gen_exp s_exp_exp_rs(exp_i)
 
-	negi_lang_local_add_var ident, ident_tok_i
-	index = s_local_indexes(s_local_len - 1)
-
-	negi_lang_cmd_add_int cmd_local_var, index, s_exp_tok_is(exp_i)
+	local_i = negi_lang_local_add_var(ident, ident_tok_i)
+	negi_lang_cmd_add_local_var s_local_indexes(local_i), s_local_scope_is(local_i), ident_tok_i
 	negi_lang_cmd_add cmd_swap, s_exp_tok_is(exp_i)
 	negi_lang_cmd_add cmd_cell_set, s_exp_tok_is(exp_i)
 	return
@@ -1846,7 +1844,7 @@
 			continue
 		}
 
-		negi_lang_local_add_var s_exp_strs(param_exp_i), s_exp_tok_is(param_exp_i)
+		_ = negi_lang_local_add_var(s_exp_strs(param_exp_i), s_exp_tok_is(param_exp_i))
 	loop
 
 	// 関数本体を解析する。
