@@ -2,7 +2,6 @@
 
 #runtime "hsp3utf"
 
-#undef _debug
 #include "negi_lang.hsp"
 
 #module m_negi_lang_demo
@@ -21,21 +20,62 @@
 #define x_result_str(%1) negi_lang_extern_result_str (%1)
 #define x_define(%1, %2) negi_lang_extern_fun_add (%1), (%2)
 
-*l_mes
-
-	repeat x_argc
-		s_ty = x_arg_ty(cnt)
-		if s_ty == ty_int {
-			mes x_arg_int(cnt)
-		} else : if s_ty == ty_str {
-			mes x_arg_str(cnt)
-		}
-	loop
-	return
-
 #deffunc app_initialize
 
-	x_define "mes", *l_mes
+	s_event_kind = ""
+	s_event_obj_id = 0
+
+	x_define "hsp3_await", *l_hsp3_await
+	x_define "hsp3_event_kind", *l_hsp3_event_kind
+	x_define "hsp3_event_obj_id", *l_hsp3_event_obj_id
+	x_define "hsp3_button", *l_hsp3_button
+	x_define "hsp3_mes", *l_hsp3_mes
+	return
+
+*l_hsp3_await
+
+	s_event_kind = ""
+	await x_arg_int(0)
+	x_result_int s_event_kind != ""
+	return
+
+*l_hsp3_event_kind
+
+	x_result_str s_event_kind
+	return
+
+*l_hsp3_event_obj_id
+
+	x_result_int s_event_obj_id
+	return
+
+*l_hsp3_button
+
+	button gosub x_arg_str(0), *l_hsp3_button_click
+	x_result_int stat // オブジェクト ID
+	return
+
+*l_hsp3_button_click
+
+	s_event_kind = "button"
+	s_event_obj_id = stat // オブジェクト ID
+	return
+
+*l_hsp3_mes
+
+	if x_argc != 1 {
+		x_result_err "mes error"
+		return
+	}
+	if x_arg_ty(0) == ty_int {
+		mes x_arg_int(0)
+	} else : if x_arg_ty(0) == ty_str {
+		mes x_arg_str(0)
+	} else {
+		logmes "unknown type " +(x_arg_ty(0) - ty_int)
+	}
+
+	x_result_int 0
 	return
 
 #deffunc app_eval str src, \
@@ -44,12 +84,12 @@
 	negi_lang_eval_src src, exit_code
 	negi_lang_err_summary output
 
+	if output != "" {
+		logmes output
+	}
 	if exit_code != 0 {
 		logmes "exit_code = " + exit_code
 		dialog "エラーが発生しました。", 1, "negi_lang_demo"
-	}
-	if output != "" {
-		logmes output
 	}
 	return
 
@@ -57,7 +97,28 @@
 
 	app_initialize
 	app_eval {"
+		let mes = fun(msg) hsp3_mes(msg);
+
+		let button = fun(label, callback) {
+			hsp3_button(label);
+		};
+		let poll = fun() {
+			let status = hsp3_await(16);
+
+			if (status != 0) {
+				let kind = hsp3_event_kind();
+				let obj_id = hsp3_event_obj_id();
+
+				hsp3_mes("Click!");
+			}
+		};
+
 		mes("Hello, world!");
+		button("Hello", fun() mes("Hello!"));
+
+		while (0 == 0) {
+			poll();
+		};
 		0
 	"}
 	return
