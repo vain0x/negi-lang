@@ -3056,6 +3056,11 @@
 // 実行
 // ###############################################
 
+#deffunc negi_lang_initialize
+
+	negi_lang_extern_fun_initialize
+	return
+
 // ソースコードをコンパイル・実行する。
 #deffunc negi_lang_eval_src str param_src, var out_exit_code, \
 	local src
@@ -3072,7 +3077,6 @@
 	negi_lang_local_initialize
 	negi_lang_loop_initialize
 	negi_lang_fun_initialize
-	negi_lang_extern_fun_initialize
 	negi_lang_cmd_initialize
 	negi_lang_cell_initialize
 	negi_lang_frame_initialize
@@ -3145,3 +3149,5 @@
 	return
 
 #global
+
+	negi_lang_initialize

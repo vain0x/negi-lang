@@ -1,0 +1,67 @@
+// ネギ言語処理系のデモンストレーション
+
+#runtime "hsp3utf"
+
+#undef _debug
+#include "negi_lang.hsp"
+
+#module m_negi_lang_demo
+
+#const true 1
+#const false 0
+
+#const ty_int negi_lang_ty_int
+#const ty_str negi_lang_ty_str
+#define x_argc negi_lang_extern_arg_len()
+#define ctype x_arg_ty(%1) negi_lang_extern_arg_ty(%1)
+#define ctype x_arg_int(%1) negi_lang_extern_arg_int(%1)
+#define ctype x_arg_str(%1) negi_lang_extern_arg_str(%1)
+#define x_result_err(%1) negi_lang_extern_result_err (%1)
+#define x_result_int(%1) negi_lang_extern_result_int (%1)
+#define x_result_str(%1) negi_lang_extern_result_str (%1)
+#define x_define(%1, %2) negi_lang_extern_fun_add (%1), (%2)
+
+*l_mes
+
+	repeat x_argc
+		s_ty = x_arg_ty(cnt)
+		if s_ty == ty_int {
+			mes x_arg_int(cnt)
+		} else : if s_ty == ty_str {
+			mes x_arg_str(cnt)
+		}
+	loop
+	return
+
+#deffunc app_initialize
+
+	x_define "mes", *l_mes
+	return
+
+#deffunc app_eval str src, \
+	local exit_code, local output
+
+	negi_lang_eval_src src, exit_code
+	negi_lang_err_summary output
+
+	if exit_code != 0 {
+		logmes "exit_code = " + exit_code
+		dialog "エラーが発生しました。", 1, "negi_lang_demo"
+	}
+	if output != "" {
+		logmes output
+	}
+	return
+
+#deffunc app_main
+
+	app_initialize
+	app_eval {"
+		mes("Hello, world!");
+		0
+	"}
+	return
+
+#global
+
+	app_main
