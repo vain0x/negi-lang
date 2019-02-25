@@ -337,6 +337,17 @@
 		b[0]
 	"}, "", 42
 
+	eval_test "GC のおかげで無限に配列や環境を生成できる", {"
+		__dev_heap_make_tiny();
+		let f = 0;
+		let i = 0;
+		while (i < 10) {
+			array_push([i, i, i, i], i);
+			i += 1;
+		}
+		0
+	"}, "", 0
+
 	test_end
 	return
 

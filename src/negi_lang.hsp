@@ -31,6 +31,12 @@
 	end 1
 
 // -----------------------------------------------
+// 警告除け
+// -----------------------------------------------
+
+#define declare if false
+
+// -----------------------------------------------
 // デバッグ用
 // -----------------------------------------------
 
@@ -310,6 +316,21 @@
 
 // 外部関数。extern 宣言によって生成されるオブジェクト。
 #enum fun_kind_extern
+
+// -----------------------------------------------
+// メモリ管理
+// -----------------------------------------------
+
+// 参照セル領域のうちスタックに割り当てられる個数。(1MB)
+#const stack_len_min 1024 * 1024 / 4
+
+// 参照セル領域のうちヒープに割り当てられる個数の初期値。(1MB)
+#const heap_len_min 1024 * 1024 / 4
+
+// 参照セル領域の長さの既定値。
+#const cell_len_min stack_len_min + heap_len_min
+
+#const s_cell_i_stack_max stack_len_min
 
 // ###############################################
 // 変数
@@ -1954,12 +1975,83 @@
 	// stack_ptr: いまのスタックの末尾
 	// stack_ptr_max: スタック全体の末尾 (= ヒープの先頭)
 	// heap_ptr: いまのヒープの末尾
-	s_cell_len = 1024 * 1024 / 4 // 1MB
+	s_cell_len = cell_len_min
 	dim s_cell_tys, s_cell_len
 	dim s_cell_vals, s_cell_len
 	s_cell_i_stack_end = 0
-	s_cell_i_stack_max = s_cell_len / 4
-	s_cell_i_heap_end = s_cell_i_stack_max
+	s_cell_i_heap_end = stack_len_min
+
+	// ヒープ領域の残りの個数がこの値を下回ったら GC する。
+	s_gc_threshold = 1024
+	return
+
+#deffunc negi_lang_cell_gc_begin
+
+	dim s_cell_gc_map, s_cell_len
+	s_cell_gc_map_len = 0
+	return
+
+#deffunc negi_lang_cell_gc_mark int cell_i, \
+	local ty, local val
+
+	if s_cell_gc_map(cell_i) { return }
+
+	s_cell_gc_map(cell_i) = true
+	ty = s_cell_tys(cell_i)
+	val = s_cell_vals(cell_i)
+
+	if ty == ty_array {
+		negi_lang_array_gc_mark val
+		return
+	}
+	return
+
+#deffunc negi_lang_cell_gc_mark_stack
+
+	repeat s_cell_i_stack_end
+		negi_lang_cell_gc_mark cnt
+	loop
+	return
+
+#deffunc negi_lang_cell_gc_move \
+	local cell_i
+
+	repeat s_cell_len
+		// スタック領域は移動しない。
+		if cnt < s_cell_i_stack_max {
+			s_cell_gc_map(cnt) = cnt
+			s_cell_gc_map_len++
+			continue
+		}
+		if s_cell_gc_map(cnt) == false {
+			s_cell_gc_map(cnt) = -1
+			continue
+		}
+
+		cell_i = s_cell_gc_map_len
+		s_cell_gc_map(cnt) = cell_i
+		s_cell_gc_map_len++
+
+		s_cell_tys(cell_i) = s_cell_tys(cnt)
+		s_cell_vals(cell_i) = s_cell_vals(cnt)
+	loop
+
+	assert s_cell_gc_map_len >= stack_len_min
+	d_trace "GC " + (s_cell_i_heap_end - s_cell_gc_map_len) + " 個のセルを解放"
+	s_cell_i_heap_end = s_cell_gc_map_len
+	return
+
+#deffunc negi_lang_cell_gc_rewrite_all
+
+	declare { dim s_array_gc_map }
+
+	repeat s_cell_i_heap_end
+		if s_cell_i_stack_end <= cnt && cnt < stack_len_min { continue }
+
+		if s_cell_tys(cnt) == ty_array {
+			s_cell_vals(cnt) = s_array_gc_map(s_cell_vals(cnt))
+		}
+	loop
 	return
 
 // -----------------------------------------------
@@ -2008,6 +2100,10 @@
 	out_cell_l = s_cell_i_heap_end
 	out_cell_r = s_cell_i_heap_end + count
 	s_cell_i_heap_end += count
+
+	if s_cell_len - s_cell_i_heap_end <= s_gc_threshold {
+		s_gc_force = true
+	}
 	return
 
 // -----------------------------------------------
@@ -2021,18 +2117,32 @@
 	// cmd_i: return 直後に実行するコマンド番号
 	// env_i: 実行中の環境番号
 	// tok_i: フレームに関係のあるトークン番号
-	dim s_frame_cmd_is
-	dim s_frame_env_is
-	dim s_frame_tok_is
+	dim s_frame_cmd_is, 16
+	dim s_frame_env_is, 16
+	dim s_frame_tok_is, 16
 	s_frame_len = 0
 	return
 
-#deffunc negi_lang_frame_push int cmd_i, int env_i, int tok_i
+#deffunc negi_lang_frame_gc_mark_all
 
-	s_frame_cmd_is(s_frame_len) = cmd_i
-	s_frame_env_is(s_frame_len) = env_i
-	s_frame_tok_is(s_frame_len) = tok_i
-	s_frame_len++
+	repeat s_frame_len
+		negi_lang_env_gc_mark s_frame_env_is(cnt)
+	loop
+	return
+
+#deffunc negi_lang_frame_push int cmd_i, int env_i, int tok_i, \
+	local frame_i
+
+	frame_i = s_frame_len
+	if frame_i == length(s_frame_tok_is) {
+		s_frame_len *= 2
+		negi_lang_frame_push cmd_i, env_i, tok_i
+	}
+	s_frame_len = frame_i + 1
+
+	s_frame_cmd_is(frame_i) = cmd_i
+	s_frame_env_is(frame_i) = env_i
+	s_frame_tok_is(frame_i) = tok_i
 	return
 
 #defcfunc negi_lang_frame_pop
@@ -2066,26 +2176,90 @@
 
 	// len: 配列の現在の長さ
 	// cell_l, cell_r: この配列の要素が占めるセルリストの範囲
-	dim s_array_lens, 1024
-	dim s_array_cell_ls, 1024
-	dim s_array_cell_rs, 1024
+	dim s_array_lens, 16
+	dim s_array_cell_ls, 16
+	dim s_array_cell_rs, 16
 	s_array_len = 0
+	return
+
+#deffunc negi_lang_array_gc_begin
+
+	dim s_array_gc_map, s_array_len
+	s_array_gc_map_len = 0
+	return
+
+#deffunc negi_lang_array_gc_mark int array_i
+
+	if s_array_gc_map(array_i) { return }
+
+	s_array_gc_map(array_i) = true
+
+	repeat s_array_lens(array_i), s_array_cell_ls(array_i)
+		negi_lang_cell_gc_mark cnt
+	loop
+	return
+
+#deffunc negi_lang_array_gc_move \
+	local array_i
+
+	repeat s_array_len
+		if s_array_gc_map(cnt) == false {
+			s_array_gc_map(cnt) = -1
+			continue
+		}
+
+		array_i = s_array_gc_map_len
+		s_array_gc_map(cnt) = array_i
+		s_array_gc_map_len++
+
+		s_array_lens(array_i) = s_array_lens(cnt)
+		s_array_cell_ls(array_i) = s_array_cell_ls(cnt)
+		s_array_cell_rs(array_i) = s_array_cell_rs(cnt)
+	loop
+
+	s_array_len = s_array_gc_map_len
+	return
+
+#deffunc negi_lang_array_gc_rewrite_all \
+	local capacity
+
+	repeat s_array_len
+		capacity = s_array_cell_rs(cnt) - s_array_cell_ls(cnt)
+		if capacity == 0 { continue }
+
+		// 長さが空なら cell_l のマップ先が存在しないので、領域を再確保する。
+		if s_array_lens(cnt) == 0 {
+			assert s_cell_gc_map(s_array_cell_ls(cnt)) < 0
+			negi_lang_array_reserve ty_array, cnt, capacity
+			continue
+		}
+
+		s_array_cell_ls(cnt) = s_cell_gc_map(s_array_cell_ls(cnt))
+		s_array_cell_rs(cnt) = s_array_cell_ls(cnt) + capacity
+	loop
 	return
 
 // 配列リストに新しい配列を追加して、その番号を返す。
 // capacity: この配列の長さの最大値
 #defcfunc negi_lang_array_add int len, int capacity, \
-	local cell_l, local cell_r
+	local cell_l, local cell_r, local array_i
 
 	assert 0 <= len && len <= capacity
 
+	array_i = s_array_len
+	if s_array_len == length(s_array_lens) {
+		s_array_len *= 2
+		_ = negi_lang_array_add(0, 0)
+	}
+	s_array_len = array_i + 1
+
 	negi_lang_heap_alloc capacity, cell_l, cell_r
 
-	s_array_lens(s_array_len) = len
-	s_array_cell_ls(s_array_len) = cell_l
-	s_array_cell_rs(s_array_len) = cell_r
+	s_array_lens(array_i) = len
+	s_array_cell_ls(array_i) = cell_l
+	s_array_cell_rs(array_i) = cell_r
 	s_array_len++
-	return s_array_len - 1
+	return array_i
 
 // 配列のキャパシティを new_len 以上にする。
 // 現在のキャパシティでは足りなければ、新しい領域を確保して移動する。
@@ -2158,6 +2332,11 @@
 	local cell_i
 
 	cell_i = negi_lang_array_ref(array_ty, array_i, index)
+	if (0 <= cell_i && cell_i < length(s_cell_tys)) == false {
+		debug array_i
+		debug index
+		debug cell_i
+	}
 	s_cell_tys(cell_i) = item_ty
 	s_cell_vals(cell_i) = item_val
 	return
@@ -2180,18 +2359,46 @@
 	s_env_i_global = -1
 	return
 
+#deffunc negi_lang_env_gc_begin
+	return
+
+#deffunc negi_lang_env_gc_mark int env_i
+
+	negi_lang_array_gc_mark s_env_array_is(env_i)
+	return
+
+#deffunc negi_lang_env_gc_mark_all
+
+	repeat s_env_len
+		negi_lang_env_gc_mark cnt
+	loop
+	return
+
+#deffunc negi_lang_env_gc_rewrite_all
+
+	repeat s_env_len
+		s_env_array_is(cnt) = s_array_gc_map(s_env_array_is(cnt))
+	loop
+	return
+
 #defcfunc negi_lang_env_add int parent_env_i, int fun_i, \
-	local array_i, local array_len, local scope_i
+	local array_i, local array_len, local scope_i, local env_i
+
+	env_i = s_env_len
+	if s_env_len == length(s_env_parents) {
+		s_env_len *= 2
+		_ = negi_lang_env_add(parent_env_i, fun_i)
+	}
+	s_env_len = env_i + 1
 
 	scope_i = s_fun_scope_is(fun_i)
 	array_len = s_scope_lens(scope_i)
 	array_i = negi_lang_array_add(array_len, array_len)
 
-	s_env_parents(s_env_len) = parent_env_i
-	s_env_scope_is(s_env_len) = scope_i
-	s_env_array_is(s_env_len) = array_i
-	s_env_len++
-	return s_env_len - 1
+	s_env_parents(env_i) = parent_env_i
+	s_env_scope_is(env_i) = scope_i
+	s_env_array_is(env_i) = array_i
+	return env_i
 
 #defcfunc negi_lang_env_ref int source_env_i, int index, int scope_i, \
 	local array_i, local env_i
@@ -2345,6 +2552,9 @@
 
 	// プログラムカウンタ (次に実行するコマンド番号)
 	s_pc = 0
+
+	// 次の命令の前に GC を実行するか否か。
+	s_gc_force = false
 
 	// 終了コード
 	s_eval_exit = 0
@@ -2682,6 +2892,10 @@
 	local cmd_i, local ty, local val
 
 	repeat
+		if s_gc_force {
+			negi_lang_gc_run
+		}
+
 		cmd_i = s_pc
 		s_pc++
 
@@ -2785,6 +2999,38 @@
 	return
 
 // ###############################################
+// ガベージコレクション
+// ###############################################
+
+// 詳細は README のガベージコレクションの節を参照。
+
+#deffunc negi_lang_gc_run
+
+	d_trace "GC run"
+
+	// GC 用の変数を初期化する。
+	negi_lang_cell_gc_begin
+	negi_lang_array_gc_begin
+	negi_lang_env_gc_begin
+
+	// 生きているオブジェクトにマークをつける。
+	negi_lang_cell_gc_mark_stack
+	negi_lang_frame_gc_mark_all
+	negi_lang_env_gc_mark_all
+
+	// 生きているオブジェクトを再配置する。
+	negi_lang_cell_gc_move
+	negi_lang_array_gc_move
+
+	// 要素番号を書き換える。
+	negi_lang_cell_gc_rewrite_all
+	negi_lang_array_gc_rewrite_all
+	negi_lang_env_gc_rewrite_all
+
+	s_gc_force = false
+	return
+
+// ###############################################
 // 実行
 // ###############################################
 
@@ -2837,6 +3083,7 @@
 
 	negi_lang_extern_fun_add "array_len", *l_array_len
 	negi_lang_extern_fun_add "array_push", *l_array_push
+	negi_lang_extern_fun_add "__dev_heap_make_tiny", *l_dev_heap_make_tiny
 	return
 
 *l_array_len
@@ -2856,6 +3103,13 @@
 	}
 	negi_lang_array_push x_arg_ty(0), x_arg_val(0), x_arg_ty(1), x_arg_val(1)
 	negi_lang_extern_result_any ty_array, x_arg_val(0)
+	return
+
+*l_dev_heap_make_tiny
+
+	s_gc_threshold = 24
+	s_cell_len = s_cell_i_heap_end + s_gc_threshold + 48
+	negi_lang_extern_result_any ty_int, 0
 	return
 
 #global
