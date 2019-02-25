@@ -97,10 +97,18 @@
 
 	app_initialize
 	app_eval {"
+		let pass = fun() {};
+
 		let mes = fun(msg) hsp3_mes(msg);
 
+		let callbacks = [];
 		let button = fun(label, callback) {
-			hsp3_button(label);
+			let obj_id = hsp3_button(label);
+
+			while (obj_id >= array_len(callbacks)) {
+				array_push(callbacks, pass);
+			}
+			callbacks[obj_id] = callback;
 		};
 		let poll = fun() {
 			let status = hsp3_await(16);
@@ -108,13 +116,13 @@
 			if (status != 0) {
 				let kind = hsp3_event_kind();
 				let obj_id = hsp3_event_obj_id();
-
-				hsp3_mes("Click!");
+				callbacks[obj_id]();
 			}
 		};
 
 		mes("Hello, world!");
 		button("Hello", fun() mes("Hello!"));
+		button("Bye", fun() mes("Bye!"));
 
 		while (0 == 0) {
 			poll();
