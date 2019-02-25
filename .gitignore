@@ -2,8 +2,9 @@ hsptmp
 obj
 start.ax
 packfile
-src/negi_lang.ax
-src/negi_lang_tests.ax
+src/*.ax
+sjis/*.hsp
+sjis/*.ax
 
 
 

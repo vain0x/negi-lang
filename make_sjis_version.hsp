@@ -1,0 +1,36 @@
+// Generate shift_jis-encoded scripts
+// for each script file in the src directory.
+
+#include "encode.as"
+
+	current_dir = dir_cur
+	src_dir = current_dir + "/src"
+	sjis_dir = current_dir + "/sjis"
+
+	chdir src_dir
+	dirlist file_name_list, "*.hsp"
+	file_name_count = stat
+
+	sdim file_names, , file_name_count
+	notesel file_name_list
+	repeat file_name_count
+		noteget file_names(cnt), cnt
+	loop
+
+	repeat file_name_count
+		file_name = file_names(cnt)
+		src_file_path = src_dir + "/" + file_name
+		sjis_file_path = sjis_dir + "/" + file_name
+
+		notesel content_utf8
+		noteload src_file_path
+
+		content_sjis = utf8n2sjis(content_utf8)
+		strrep content_sjis, "#runtime \"hsp3utf\"", ""
+
+		notesel content_sjis
+		notesave sjis_file_path
+	loop
+
+	chdir current_dir
+	end
