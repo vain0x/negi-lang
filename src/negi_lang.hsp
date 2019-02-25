@@ -626,6 +626,7 @@
 #define ctype tok_leads_term(%1) \
 	((%1) == tok_int || (%1) == tok_str || (%1) == tok_ident \
 	|| (%1) == tok_paren_l || (%1) == tok_bracket_l || (%1) == tok_fun \
+	|| (%1) == tok_op \
 	)
 
 // トークンが文の始まりを表すか否か。
@@ -1040,6 +1041,27 @@
 
 	return exp_l
 
+// 前置式をパースする。
+// ここでは `-x` のように式の前に演算子がつく種類の式を前置式と呼んでいる。
+#defcfunc negi_lang_parse_prefix var tok_i, \
+	local exp_l, local exp_r, local op_tok_i, local op_text
+
+	if s_tok_kinds(tok_i) == tok_op {
+		op_tok_i = tok_i
+		op_text = negi_lang_tok_text(tok_i)
+
+		if op_text == "-" {
+			tok_i++
+			exp_l = negi_lang_exp_add_int(exp_int, 0, op_tok_i)
+			exp_r = negi_lang_parse_suffix(tok_i)
+			return negi_lang_exp_add_bin(op_sub, exp_l, exp_r, op_tok_i)
+		}
+
+		return negi_lang_exp_add_err("この演算子は前置演算子ではありません。", tok_i)
+	}
+
+	return negi_lang_parse_suffix(tok_i)
+
 // トークンが演算子で、指定されたレベルを持つなら、その演算子の種類を返す。
 // そうでなければ op_err を返す。
 #defcfunc negi_lang_parse_op var tok_i, int op_level, \
@@ -1104,7 +1126,7 @@
 #defcfunc negi_lang_parse_bin_next var tok_i, int op_level
 
 	if op_level == op_level_mul {
-		return negi_lang_parse_suffix(tok_i)
+		return negi_lang_parse_prefix(tok_i)
 	}
 	return negi_lang_parse_bin(tok_i, op_level + 1)
 

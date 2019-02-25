@@ -105,7 +105,9 @@ atom
 
 suffix = atom ( '[' term ']' )*
 
-bin_mul = suffix ( ( '*' / '/' / '%' ) suffix )*
+prefix = '-'? suffix
+
+bin_mul = prefix ( ( '*' / '/' / '%' ) prefix )*
 
 bin_add = bin_mul ( ( '+' / '-' ) bin_mul )*
 
