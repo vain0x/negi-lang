@@ -3103,9 +3103,19 @@
 
 #deffunc negi_lang_extern_fun_builtin
 
+	negi_lang_extern_fun_add "int_to_str", *l_int_to_str
 	negi_lang_extern_fun_add "array_len", *l_array_len
 	negi_lang_extern_fun_add "array_push", *l_array_push
 	negi_lang_extern_fun_add "__dev_heap_make_tiny", *l_dev_heap_make_tiny
+	return
+
+*l_int_to_str
+
+	if x_argc != 1 || x_arg_ty(0) != ty_int {
+		negi_lang_extern_result_err "int_to_str error"
+		return
+	}
+	negi_lang_extern_result_any ty_str, negi_lang_str_add(str(x_arg_val(0)))
 	return
 
 *l_array_len

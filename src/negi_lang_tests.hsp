@@ -349,6 +349,10 @@
 		0
 	"}, "", 0
 
+	eval_test "整数を文字列に変換できる", {"
+		int_to_str(0) == "0"
+	"}, "", 1
+
 	test_end
 	return
 
