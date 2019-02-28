@@ -1,0 +1,4 @@
+#!/bin/bash
+
+gcc -std=c11 -Wall -D_DEBUG ./negi_lang.c ./negi_lang_tests.c &&
+    ./a.out
