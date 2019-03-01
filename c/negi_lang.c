@@ -64,68 +64,17 @@ static void mem_reserve(void **data, int count, int unit, int *capacity,
 // 汎用: 文字列
 // ###############################################
 
-static void str_reserve(Str *str, int new_capacity) {
-    assert(str != NULL && new_capacity >= 0);
+static char *str_slice(const char *str, int l, int r) {
+    assert(str != NULL && 0 <= l && l <= r);
 
-    if (str->capacity >= new_capacity) {
-        return;
-    }
+    char *slice = (char *)mem_alloc(r - l + 1, sizeof(char));
 
-    char *new_data = (char *)mem_alloc(new_capacity + 1, sizeof(char));
-    strcpy(new_data, str->data);
-
-    str->data = new_data;
-    str->capacity = new_capacity;
-}
-
-static void str_append_raw(Str *str, const char *src) {
-    int src_size = strlen(src);
-
-    int capacity = str->size + src_size;
-    if (capacity > str->capacity) {
-        capacity += str->capacity;
-        str_reserve(str, capacity);
-    }
-
-    assert(str->data != NULL && str->capacity >= capacity);
-
-    strcpy(str->data + str->size, src);
-    str->size += src_size;
-}
-
-static void str_append(Str *str, const Str *src) {
-    // HELP: We could optimize this.
-    str_append_raw(str, src->data);
-}
-
-static Str *str_from_raw(const char *src) {
-    assert(src != NULL);
-
-    int src_len = strlen(src);
-
-    Str *str = mem_alloc(1, sizeof(Str));
-    *str = (Str){
-        .data = (char *)mem_alloc(src_len + 1, sizeof(char)),
-        .size = src_len,
-        .capacity = src_len,
-    };
-    strcpy(str->data, src);
-    return str;
-}
-
-static Str *str_slice(const Str *str, int l, int r) {
-    assert(str != NULL && 0 <= l && l <= r && r <= str->size);
-
-    Str *slice = str_from_raw("");
-    str_reserve(slice, r - l);
-
-    assert(slice->capacity >= r - l);
-    strncpy(slice->data, str->data + l, r - l);
-    slice->data[r - l] = '\0';
+    strncpy(slice, str + l, r - l);
+    slice[r - l] = '\0';
     return slice;
 }
 
-static Str *str_format(const char *fmt, ...) {
+static char *str_format(const char *fmt, ...) {
     char buffer[4096];
 
     va_list ap;
@@ -134,23 +83,74 @@ static Str *str_format(const char *fmt, ...) {
     va_end(ap);
 
     if (size < 0) {
-        fprintf(stderr, "FATAL ERROR str_format\n");
-        abort();
+        failwith("FATAL ERROR str_format");
     }
 
-    return str_from_raw(buffer);
+    return str_slice(buffer, 0, size);
 }
+
+// ###############################################
+// 汎用: 文字列ビルダー
+// ###############################################
+
+static void sb_reserve(StringBuilder *sb, int new_capacity) {
+    assert(sb != NULL && new_capacity >= 0);
+
+    if (sb->capacity >= new_capacity) {
+        return;
+    }
+
+    char *new_data = (char *)mem_alloc(new_capacity + 1, sizeof(char));
+    strcpy(new_data, sb->data);
+
+    sb->data = new_data;
+    sb->capacity = new_capacity;
+}
+
+static void sb_append(StringBuilder *sb, const char *src) {
+    int src_size = strlen(src);
+    if (src_size == 0) {
+        return;
+    }
+
+    int capacity = sb->size + src_size;
+    if (capacity > sb->capacity) {
+        capacity += sb->capacity;
+        sb_reserve(sb, capacity);
+    }
+
+    assert(sb->data != NULL && sb->capacity >= capacity);
+
+    strcpy(sb->data + sb->size, src);
+    sb->size += src_size;
+}
+
+static void *sb_new() {
+    StringBuilder *sb = mem_alloc(1, sizeof(StringBuilder));
+    *sb = (StringBuilder){
+        .data = "",
+        .size = 0,
+        .capacity = 0,
+    };
+    return sb;
+}
+
+static const char *sb_to_str(const StringBuilder *sb) { return sb->data; }
 
 // ###############################################
 // ソースコード
 // ###############################################
 
 static void src_initialize(Ctx *ctx, const char *src) {
-    ctx->src = str_from_raw(src);
+    assert(ctx != NULL && src != NULL);
+
+    int len = strlen(src);
+    ctx->src_len = len;
+    ctx->src = str_slice(src, 0, len);
 }
 
-static Str *src_slice(Ctx *ctx, int l, int r) {
-    assert(0 <= l && l <= r && r <= ctx->src->size);
+static const char *src_slice(Ctx *ctx, int l, int r) {
+    assert(0 <= l && l <= r && r <= ctx->src_len);
     return str_slice(ctx->src, l, r);
 }
 
@@ -162,7 +162,10 @@ static Str *src_slice(Ctx *ctx, int l, int r) {
 // は使わない。) エラーの報告には、そのエラーが発生した箇所
 // (ソースコードのどのあたりか) を含める。
 
-static void err_add(Ctx *ctx, const Str *message, int src_l, int src_r) {
+static void err_add(Ctx *ctx, const char *message, int src_l, int src_r) {
+    assert(message != 0 && 0 <= src_l && src_l <= src_r &&
+           src_r <= ctx->src_len);
+
     if (ctx->errs.capacity == ctx->errs.len) {
         mem_reserve((void **)&ctx->errs.data, ctx->errs.len, sizeof(struct Err),
                     &ctx->errs.capacity, 1 + ctx->errs.capacity * 2);
@@ -179,11 +182,13 @@ static void err_add(Ctx *ctx, const Str *message, int src_l, int src_r) {
 
 // 指定された位置の行番号 (y) と列番号 (x) を計算する。
 static struct TextPos find_pos(Ctx *ctx, int src_i) {
+    assert(ctx != NULL && 0 <= src_i && src_i <= ctx->src_len);
+
     int y = 0;
     int x = 0;
 
     for (int i = 0; i < src_i; i++) {
-        if (ctx->src->data[i] == '\n') {
+        if (ctx->src[i] == '\n') {
             y++;
             x = 0;
         } else {
@@ -198,8 +203,8 @@ static struct TextPos find_pos(Ctx *ctx, int src_i) {
 }
 
 // エラーの一覧を表す文字列を生成する。
-static Str *err_summary(Ctx *ctx) {
-    Str *summary = str_from_raw("");
+static const char *err_summary(Ctx *ctx) {
+    StringBuilder *summary = sb_new();
 
     for (int err_i = 0; err_i < ctx->errs.len; err_i++) {
         struct Err *err = &ctx->errs.data[err_i];
@@ -207,18 +212,18 @@ static Str *err_summary(Ctx *ctx) {
         struct TextPos pos_l = find_pos(ctx, err->src_l);
         struct TextPos pos_r = find_pos(ctx, err->src_r);
 
-        Str *text = src_slice(ctx, err->src_l, err->src_r);
+        const char *text = src_slice(ctx, err->src_l, err->src_r);
 
-        str_append(summary, str_format("%d:%d..%d%d", 1 + pos_l.y, 1 + pos_l.x,
-                                       1 + pos_r.y, 1 + pos_l.x));
-        str_append_raw(summary, " near '");
-        str_append(summary, text);
-        str_append_raw(summary, "'\n  ");
-        str_append(summary, err->message);
-        str_append_raw(summary, "\n");
+        sb_append(summary, str_format("%d:%d..%d%d", 1 + pos_l.y, 1 + pos_l.x,
+                                      1 + pos_r.y, 1 + pos_l.x));
+        sb_append(summary, " near '");
+        sb_append(summary, text);
+        sb_append(summary, "'\n  ");
+        sb_append(summary, err->message);
+        sb_append(summary, "\n");
     }
 
-    return summary;
+    return sb_to_str(summary);
 }
 
 // ###############################################
@@ -274,7 +279,7 @@ static struct Tok *tok_get(Ctx *ctx, int tok_i) {
     return &ctx->toks.data[tok_i];
 }
 
-static Str *tok_text(Ctx *ctx, int tok_i) {
+static const char *tok_text(Ctx *ctx, int tok_i) {
     struct Tok *tok = tok_get(ctx, tok_i);
     return src_slice(ctx, tok->src_l, tok->src_r);
 }
@@ -306,7 +311,7 @@ static enum TokKind tok_text_to_kind(const char *text) {
 static void tokenize(Ctx *ctx) {
     int r = 0;
 
-    while (r < ctx->src->size) {
+    while (r < ctx->src_len) {
         // 1回のループで、位置 l から始まる1つのトークンを切り出す。
         // l の次の文字 c からトークンの種類を特定して、
         // そのトークンが広がる範囲の右端まで r を進める。
@@ -315,7 +320,7 @@ static void tokenize(Ctx *ctx) {
         int l = r;
 
         // 次の文字を変数に入れておく。(先読み)
-        char c = ctx->src->data[r];
+        char c = ctx->src[r];
 
         // 空白と改行は無視する。
         if (c == ' ' || c == '\t' || c == '\r' || c == '\n') {
@@ -324,7 +329,7 @@ static void tokenize(Ctx *ctx) {
         }
 
         if (is_digit(c)) {
-            while (r < ctx->src->size && is_digit(ctx->src->data[r])) {
+            while (r < ctx->src_len && is_digit(ctx->src[r])) {
                 r++;
             }
 
@@ -335,8 +340,8 @@ static void tokenize(Ctx *ctx) {
         if (c == '"') {
             r++;
 
-            while (r < ctx->src->size) {
-                char c = ctx->src->data[r];
+            while (r < ctx->src_len) {
+                char c = ctx->src[r];
 
                 if (c == '\r' || c == '\n') {
                     break;
@@ -355,12 +360,12 @@ static void tokenize(Ctx *ctx) {
 
         if (is_ident_char(c) && !is_digit(c)) {
             r++;
-            while (r < ctx->src->size && is_ident_char(ctx->src->data[r])) {
+            while (r < ctx->src_len && is_ident_char(ctx->src[r])) {
                 r++;
             }
 
-            Str *text = src_slice(ctx, l, r);
-            enum TokKind kind = tok_text_to_kind(text->data);
+            const char *text = src_slice(ctx, l, r);
+            enum TokKind kind = tok_text_to_kind(text);
             tok_add(ctx, kind, l, r);
             continue;
         }
@@ -393,7 +398,7 @@ static void tokenize(Ctx *ctx) {
         }
 
         if (is_op_char(c)) {
-            while (r < ctx->src->size && is_op_char(ctx->src->data[r])) {
+            while (r < ctx->src_len && is_op_char(ctx->src[r])) {
                 r++;
             }
             tok_add(ctx, tok_op, l, r);
@@ -402,12 +407,12 @@ static void tokenize(Ctx *ctx) {
 
         // このとき、文字 c
         // はトークンとして不正なもの。エラーを表すトークンとして追加する。
-        d_trace(str_format("tok_err char = %c", c)->data);
+        d_trace(str_format("tok_err char = %c", c));
         r++;
         tok_add(ctx, tok_err, l, r);
     }
 
-    assert(r == ctx->src->size);
+    assert(r == ctx->src_len);
     tok_add(ctx, tok_eof, r, r);
     return;
 }
@@ -492,7 +497,7 @@ static Exp *exp_get(Ctx *ctx, int exp_i) {
 
 static int exp_add_err(Ctx *ctx, const char *message, int tok_i) {
     int exp_i = exp_add(ctx, exp_err, tok_i);
-    exp_get(ctx, exp_i)->str_value = str_from_raw(message);
+    exp_get(ctx, exp_i)->str_value = message;
     return exp_i;
 }
 
@@ -502,7 +507,7 @@ static int exp_add_int(Ctx *ctx, ExpKind kind, int value, int tok_i) {
     return exp_i;
 }
 
-static int exp_add_str(Ctx *ctx, ExpKind kind, Str *value, int tok_i) {
+static int exp_add_str(Ctx *ctx, ExpKind kind, const char *value, int tok_i) {
     int exp_i = exp_add(ctx, kind, tok_i);
     exp_get(ctx, exp_i)->str_value = value;
     return exp_i;
@@ -556,10 +561,14 @@ static int exp_add_while(Ctx *ctx, int cond_exp_i, int body_exp_i, int tok_i) {
 // 構文解析
 // -----------------------------------------------
 
+static int parse_term(Ctx *ctx, int *tok_i);
+
+static int parse_exp(Ctx *ctx, int *tok_i);
+
 static int parse_atom(Ctx *ctx, int *tok_i) {
     switch (tok_get(ctx, *tok_i)->kind) {
     case tok_int: {
-        int value = atol(tok_text(ctx, *tok_i)->data);
+        int value = atol(tok_text(ctx, *tok_i));
         return exp_add_int(ctx, exp_int, value, *tok_i++);
     }
     default: { failwith("Unknown token kind as atom"); }
@@ -592,12 +601,13 @@ static void parse(Ctx *ctx) {
 // ###############################################
 
 void negi_lang_test_util() {
-    Str *str = str_from_raw("Hello");
-    str_append_raw(str, ", world!");
-    assert(strcmp(str->data, "Hello, world!") == 0);
+    StringBuilder *sb = sb_new();
+    sb_append(sb, "Hello");
+    sb_append(sb, ", world!");
+    assert(strcmp(sb_to_str(sb), "Hello, world!") == 0);
 }
 
-Str *negi_lang_tokenize_dump(const char *src) {
+const char *negi_lang_tokenize_dump(const char *src) {
     Ctx *ctx = mem_alloc(1, sizeof(Ctx));
 
     *ctx = (Ctx){};
@@ -605,27 +615,27 @@ Str *negi_lang_tokenize_dump(const char *src) {
     src_initialize(ctx, src);
     tokenize(ctx);
 
-    Str *str = str_from_raw("");
+    StringBuilder *sb = sb_new();
     for (int i = 0; i < ctx->toks.len; i++) {
-        str_append(str, tok_text(ctx, i));
-        str_append_raw(str, ",");
+        sb_append(sb, tok_text(ctx, i));
+        sb_append(sb, ",");
     }
 
-    return str;
+    return sb_to_str(sb);
 }
 
-static void dump_exp(Ctx *ctx, int exp_i, Str *out) {
+static void dump_exp(Ctx *ctx, int exp_i, StringBuilder *out) {
     Exp *exp = exp_get(ctx, exp_i);
     switch (exp->kind) {
     case exp_int: {
-        str_append(out, str_format("%d", exp->int_value));
+        sb_append(out, str_format("%d", exp->int_value));
         break;
     }
     default: { failwith("Unknown exp kind"); }
     }
 }
 
-Str *negi_lang_parse_dump(const char *src) {
+const char *negi_lang_parse_dump(const char *src) {
     Ctx *ctx = mem_alloc(1, sizeof(Ctx));
 
     *ctx = (Ctx){};
@@ -634,9 +644,9 @@ Str *negi_lang_parse_dump(const char *src) {
     tokenize(ctx);
     parse(ctx);
 
-    Str *str = str_from_raw("");
-    dump_exp(ctx, ctx->exp_i_root, str);
-    return str;
+    StringBuilder *sb = sb_new();
+    dump_exp(ctx, ctx->exp_i_root, sb);
+    return sb_to_str(sb);
 }
 
 void _trace(const char *file_name, int line, const char *message) {

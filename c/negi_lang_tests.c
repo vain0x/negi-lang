@@ -12,13 +12,13 @@ int main() {
     negi_lang_test_util();
 
     {
-        Str *str = negi_lang_tokenize_dump("(1 ++ 2)");
-        assert(strcmp(str->data, "(,1,++,2,),,") == 0);
+        const char *str = negi_lang_tokenize_dump("(1 ++ 2)");
+        assert(strcmp(str, "(,1,++,2,),,") == 0);
     }
 
     {
-        Str *str = negi_lang_parse_dump(" 42 ");
-        assert(strcmp(str->data, "42") == 0);
+        const char *str = negi_lang_parse_dump(" 42 ");
+        assert(strcmp(str, "42") == 0);
     }
 
     fprintf(stderr, "SUCCESS!\n");
