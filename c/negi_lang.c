@@ -10,6 +10,16 @@
 #define array_len(X) (sizeof(X) / sizeof(*X))
 
 // ###############################################
+// 汎用: デバッグ用
+// ###############################################
+
+static __attribute__((noreturn)) void
+do_failwith(const char *file_name, int line, const char *message) {
+    fprintf(stderr, "FATAL ERROR at %s:%d\n%s\n", file_name, line, message);
+    abort();
+}
+
+// ###############################################
 // 汎用: メモリ
 // ###############################################
 
@@ -155,7 +165,7 @@ static Str *src_slice(Ctx *ctx, int l, int r) {
 static void err_add(Ctx *ctx, const Str *message, int src_l, int src_r) {
     if (ctx->errs.capacity == ctx->errs.len) {
         mem_reserve((void **)&ctx->errs.data, ctx->errs.len, sizeof(struct Err),
-                    &ctx->errs.capacity, ctx->errs.capacity * 2);
+                    &ctx->errs.capacity, 1 + ctx->errs.capacity * 2);
     }
 
     int err_i = ctx->errs.len++;
@@ -403,6 +413,181 @@ static void tokenize(Ctx *ctx) {
 }
 
 // ###############################################
+// 構文解析
+// ###############################################
+
+// トークンのリストに再帰下降構文解析を適用して、抽象構文木を作る。
+
+// -----------------------------------------------
+// トークンの種類
+// -----------------------------------------------
+
+// トークンが項の始まりを表すか否か。
+static bool tok_leads_term(enum TokKind kind) {
+    return kind == tok_int || kind == tok_str || kind == tok_ident ||
+           kind == tok_paren_l || kind == tok_bracket_l || kind == tok_fun ||
+           kind == tok_op;
+}
+
+// トークンが文の始まりを表すか否か。
+static bool tok_leads_stmt(enum TokKind kind) {
+    return tok_leads_term(kind) || kind == tok_let || kind == tok_if ||
+           kind == tok_while || kind == tok_break || kind == tok_return;
+}
+
+// -----------------------------------------------
+// 部分式リスト
+// -----------------------------------------------
+
+typedef struct SubExpPair {
+    int subexp_l, subexp_r;
+} SubExpPair;
+
+static struct SubExpPair subexp_add(Ctx *ctx, int *exp_is, int exp_i_len) {
+    if (ctx->subexps.len + exp_i_len > ctx->subexps.capacity) {
+        mem_reserve((void **)&ctx->subexps.data, ctx->subexps.len,
+                    sizeof(SubExp), &ctx->subexps.capacity,
+                    1 + ctx->subexps.capacity * 2 + exp_i_len);
+    }
+    assert(ctx->subexps.len + exp_i_len <= ctx->subexps.capacity);
+
+    int subexp_l = ctx->subexps.len;
+    int subexp_r = ctx->subexps.len + exp_i_len;
+    ctx->subexps.len += exp_i_len;
+
+    for (int i = 0; i < exp_i_len; i++) {
+        ctx->subexps.data[subexp_l + i] = (SubExp){
+            .exp_i = exp_is[i],
+        };
+    }
+
+    return (SubExpPair){
+        .subexp_l = subexp_l,
+        .subexp_r = subexp_r,
+    };
+}
+
+// -----------------------------------------------
+// 式リスト
+// -----------------------------------------------
+
+static int exp_add(Ctx *ctx, ExpKind kind, int tok_i) {
+    if (ctx->exps.len == ctx->exps.capacity) {
+        mem_reserve((void **)&ctx->exps.data, ctx->exps.len, sizeof(Exp),
+                    &ctx->exps.capacity, 1 + ctx->exps.capacity * 2);
+    }
+
+    int exp_i = ctx->exps.len++;
+    ctx->exps.data[exp_i] = (Exp){
+        .kind = kind,
+        .tok_i = tok_i,
+    };
+    return exp_i;
+}
+
+static Exp *exp_get(Ctx *ctx, int exp_i) {
+    assert(0 <= exp_i && exp_i < ctx->exps.len);
+    return &ctx->exps.data[exp_i];
+}
+
+static int exp_add_err(Ctx *ctx, const char *message, int tok_i) {
+    int exp_i = exp_add(ctx, exp_err, tok_i);
+    exp_get(ctx, exp_i)->str_value = str_from_raw(message);
+    return exp_i;
+}
+
+static int exp_add_int(Ctx *ctx, ExpKind kind, int value, int tok_i) {
+    int exp_i = exp_add(ctx, kind, tok_i);
+    exp_get(ctx, exp_i)->int_value = value;
+    return exp_i;
+}
+
+static int exp_add_str(Ctx *ctx, ExpKind kind, Str *value, int tok_i) {
+    int exp_i = exp_add(ctx, kind, tok_i);
+    exp_get(ctx, exp_i)->str_value = value;
+    return exp_i;
+}
+
+static int exp_add_bin(Ctx *ctx, OpKind op, int exp_l, int exp_r, int tok_i) {
+    int exp_i = exp_add(ctx, exp_op, tok_i);
+    exp_get(ctx, exp_i)->exp_l = exp_l;
+    exp_get(ctx, exp_i)->exp_r = exp_r;
+    return exp_i;
+}
+
+static int exp_add_subexps(Ctx *ctx, ExpKind kind, int exp_l, int *exp_is,
+                           int exp_i_len, int tok_i) {
+    struct SubExpPair subexp = subexp_add(ctx, exp_is, exp_i_len);
+
+    int exp_i = exp_add(ctx, kind, tok_i);
+    Exp *exp = exp_get(ctx, exp_i);
+    exp->exp_l = exp_l;
+    exp->subexp_l = subexp.subexp_l;
+    exp->subexp_r = subexp.subexp_r;
+    return exp_i;
+}
+
+static int exp_add_let(Ctx *ctx, int ident_tok_i, int init_exp_i, int tok_i) {
+    int exp_i = exp_add(ctx, exp_let, tok_i);
+    exp_get(ctx, exp_i)->int_value = ident_tok_i;
+    exp_get(ctx, exp_i)->exp_l = init_exp_i;
+    return exp_i;
+}
+
+static int exp_add_if(Ctx *ctx, int cond_exp_i, int then_exp_i, int else_exp_i,
+                      int tok_i) {
+    int exp_i = exp_add(ctx, exp_if, tok_i);
+    Exp *exp = exp_get(ctx, exp_i);
+    exp->exp_cond = cond_exp_i;
+    exp->exp_l = then_exp_i;
+    exp->exp_r = else_exp_i;
+    return exp_i;
+}
+
+static int exp_add_while(Ctx *ctx, int cond_exp_i, int body_exp_i, int tok_i) {
+    int exp_i = exp_add(ctx, exp_while, tok_i);
+    Exp *exp = exp_get(ctx, exp_i);
+    exp->exp_cond = cond_exp_i;
+    exp->exp_l = body_exp_i;
+    return exp_i;
+}
+
+// -----------------------------------------------
+// 構文解析
+// -----------------------------------------------
+
+static int parse_atom(Ctx *ctx, int *tok_i) {
+    switch (tok_get(ctx, *tok_i)->kind) {
+    case tok_int: {
+        int value = atol(tok_text(ctx, *tok_i)->data);
+        return exp_add_int(ctx, exp_int, value, *tok_i++);
+    }
+    default: { failwith("Unknown token kind as atom"); }
+    }
+}
+
+static void parse_eof(Ctx *ctx, int *tok_i) {
+    Tok *tok = tok_get(ctx, *tok_i);
+    if (tok->kind != tok_eof) {
+        err_add(
+            ctx,
+            str_format(
+                "この字句を解釈できませんでした。 (tok_i %d, tok_kind = %d)",
+                *tok_i, tok->kind),
+            tok->src_l, tok->src_r);
+    }
+}
+
+static void parse(Ctx *ctx) {
+    int exp_i_bad = exp_add_err(ctx, "NOT AN EXPRESSION", 0);
+    assert(exp_i_bad == 0);
+
+    int tok_i = 0;
+    ctx->exp_i_root = parse_atom(ctx, &tok_i);
+    parse_eof(ctx, &tok_i);
+}
+
+// ###############################################
 // 実行
 // ###############################################
 
@@ -426,6 +611,31 @@ Str *negi_lang_tokenize_dump(const char *src) {
         str_append_raw(str, ",");
     }
 
+    return str;
+}
+
+static void dump_exp(Ctx *ctx, int exp_i, Str *out) {
+    Exp *exp = exp_get(ctx, exp_i);
+    switch (exp->kind) {
+    case exp_int: {
+        str_append(out, str_format("%d", exp->int_value));
+        break;
+    }
+    default: { failwith("Unknown exp kind"); }
+    }
+}
+
+Str *negi_lang_parse_dump(const char *src) {
+    Ctx *ctx = mem_alloc(1, sizeof(Ctx));
+
+    *ctx = (Ctx){};
+
+    src_initialize(ctx, src);
+    tokenize(ctx);
+    parse(ctx);
+
+    Str *str = str_from_raw("");
+    dump_exp(ctx, ctx->exp_i_root, str);
     return str;
 }
 

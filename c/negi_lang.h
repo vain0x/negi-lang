@@ -17,7 +17,7 @@ struct NegiLangContext;
 // トークンの種類
 // -----------------------------------------------
 
-enum TokKind {
+typedef enum TokKind {
     // ソースコードに使えないトークン
     tok_err = 1,
 
@@ -73,13 +73,13 @@ enum TokKind {
     tok_fun,
 
     tok_return,
-};
+} TokKind;
 
 // -----------------------------------------------
 // 式の種類
 // -----------------------------------------------
 
-enum ExpKind {
+typedef enum ExpKind {
     exp_err,
 
     // 整数リテラル
@@ -125,7 +125,7 @@ enum ExpKind {
     exp_fun,
 
     exp_return,
-};
+} ExpKind;
 
 // -----------------------------------------------
 // 無効な式番号
@@ -139,7 +139,7 @@ enum ExpIndex {
 // 演算子の種類
 // -----------------------------------------------
 
-enum OpKind {
+typedef enum OpKind {
     op_err,
     // ; (semicolon)
     op_semi,
@@ -187,13 +187,13 @@ enum OpKind {
 
     // 配列の末尾に要素を追加する。
     op_array_push,
-};
+} OpKind;
 
 // -----------------------------------------------
 // 演算子のレベルの種類
 // -----------------------------------------------
 
-enum OpLevel {
+typedef enum OpLevel {
     op_level_set,
     // comparison
     op_level_cmp,
@@ -201,7 +201,7 @@ enum OpLevel {
     op_level_add,
     // multitive
     op_level_mul,
-};
+} OpLevel;
 
 // -----------------------------------------------
 // スコープ番号
@@ -215,7 +215,7 @@ enum ScopeIndex {
 // 命令の種類
 // -----------------------------------------------
 
-enum CmdKind {
+typedef enum CmdKind {
     // エラー
     cmd_err,
 
@@ -274,13 +274,13 @@ enum CmdKind {
 
     // 演算
     cmd_op,
-};
+} CmdKind;
 
 // -----------------------------------------------
 // 値の型タグ
 // -----------------------------------------------
 
-enum TyKind {
+typedef enum TyKind {
     ty_err,
 
     // 整数。値は整数値そのもの。
@@ -300,19 +300,19 @@ enum TyKind {
 
     // 参照セル。値は s_cells の要素番号。
     ty_cell,
-};
+} TyKind;
 
 // -----------------------------------------------
 // 関数の種類
 // -----------------------------------------------
 
-enum FunKind {
+typedef enum FunKind {
     // クロージャ。fun 式によって生成されるオブジェクト。
     fun_kind_closure,
 
     // 外部関数。extern 宣言によって生成されるオブジェクト。
     fun_kind_extern,
-};
+} FunKind;
 
 // -----------------------------------------------
 // メモリ管理
