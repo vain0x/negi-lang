@@ -527,7 +527,7 @@ typedef struct ExternFunFrame {
 
     int arg_array_i;
     int result_cell_i;
-}ExternFunFrame;
+} ExternFunFrame;
 
 // -----------------------------------------------
 // ループスタック
@@ -563,10 +563,114 @@ typedef struct VecCmd {
 } VecCmd;
 
 // ###############################################
+// 評価
+// ###############################################
+
+// -----------------------------------------------
+// 参照セル
+// -----------------------------------------------
+
+typedef struct Cell {
+    int ty, val;
+} Cell;
+
+typedef struct VecCell {
+    Cell *data;
+    int len, capacity;
+} VecCell;
+
+// -----------------------------------------------
+// フレーム
+// -----------------------------------------------
+
+// クロージャの呼び出しのメタデータを記録する。
+typedef struct Frame {
+    // return した直後に実行するコマンド番号
+    int cmd_i;
+
+    // 実行中の環境番号
+    int env_i;
+
+    int tok_i;
+} Frame;
+
+typedef struct VecFrame {
+    Frame *data;
+    int len, capacity;
+} VecFrame;
+
+// -----------------------------------------------
+// 文字列
+// -----------------------------------------------
+
+typedef struct Str {
+    char *data;
+    int len, capacity;
+} Str;
+
+typedef struct VecStr {
+    Str *data;
+    int len, capacity;
+} VecStr;
+
+// -----------------------------------------------
+// 配列
+// -----------------------------------------------
+
+typedef struct Array {
+    // 配列の要素が占める参照セルリストの範囲
+    int cell_l, cell_r;
+
+    // 配列の長さ
+    int len;
+} Array;
+
+typedef struct VecArray {
+    Array *data;
+    int len, capacity;
+} VecArray;
+
+// -----------------------------------------------
+// 環境
+// -----------------------------------------------
+
+typedef struct Env {
+    // 親となる環境番号 (なければ -1)
+    int parent;
+
+    int scope_i;
+
+    // 引数やローカル変数を格納する配列番号
+    int array_i;
+} Env;
+
+typedef struct VecEnv {
+    Env *data;
+    int len, capacity;
+} VecEnv;
+
+// -----------------------------------------------
+// クロージャ
+// -----------------------------------------------
+
+typedef struct Closure {
+    // クロージャに対応する関数番号
+    int fun_i;
+    // クロージャが生成された環境番号
+    int env_i;
+} Closure;
+
+typedef struct VecClosure {
+    Closure *data;
+    int len, capacity;
+} VecClosure;
+
+// ###############################################
 // コンテクスト
 // ###############################################
 
 struct NegiLangContext {
+    // ソースコード。
     const char *src;
     int src_len;
 
@@ -593,14 +697,35 @@ struct NegiLangContext {
     int cmd_i_entry;
     int cmd_i_exit;
 
+    VecCell cells;
+    // 参照セルリストのスタック領域の末尾を指す。
+    int stack_end;
+    // 参照セルリストのヒープ領域の末尾を指す。
+    int heap_end;
+    // ガベージコレクションを実行する。
+    int gc_threshold;
+    // フレームのスタック。
+    VecFrame frames;
+    VecStr strs;
+    VecArray arrays;
+    VecEnv envs;
+    VecClosure closures;
+
     bool extern_calling;
     ExternFunFrame extern_fun_frame;
+
+    // プログラムカウンタ。次に実行するコマンド番号。
+    int pc;
+    // ガベージコレクションを実行するか。
+    bool does_gc;
+    int exit_code;
 };
 
 extern void negi_lang_test_util();
 extern const char *negi_lang_tokenize_dump(const char *src);
 extern const char *negi_lang_parse_dump(const char *src);
 extern const char *negi_lang_gen_dump(const char *src);
+extern void negi_lang_eval_for_testing(const char *src, int * exit_code, const char **output);
 
 // ###############################################
 // デバッグ用
@@ -613,6 +738,8 @@ extern const char *negi_lang_gen_dump(const char *src);
 // ネギ言語処理系のバグに起因するエラーを報告して、異常終了する。
 // 入力されたプログラムの問題は、これではなく以下にある「エラー」の仕組みを使って報告する。
 #define failwith(message) do_failwith(__FILE__, __LINE__, message)
+
+#define unimplemented() failwith("unimplemented")
 
 // -----------------------------------------------
 // デバッグ用

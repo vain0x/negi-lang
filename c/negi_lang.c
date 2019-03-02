@@ -544,10 +544,6 @@ static Exp *exp_get(Ctx *ctx, int exp_i) {
     return &ctx->exps.data[exp_i];
 }
 
-static ExpKind exp_kind(Ctx *ctx, int exp_i) {
-    return exp_get(ctx, exp_i)->kind;
-}
-
 static int exp_add_err(Ctx *ctx, const char *message, int tok_i) {
     int exp_i = exp_add(ctx, exp_err, tok_i);
     exp_get(ctx, exp_i)->str_value = message;
@@ -1723,6 +1719,633 @@ static void gen(Ctx *ctx) {
 }
 
 // ###############################################
+// 評価
+// ###############################################
+
+static void eval_abort(Ctx *ctx, const char *message, int tok_i);
+
+static int eval_current_tok_i(Ctx *ctx);
+
+// -----------------------------------------------
+// 参照セルリスト
+// -----------------------------------------------
+
+static void cell_initialize(Ctx *ctx) {
+    mem_reserve((void **)&ctx->cells.data, 0, sizeof(Cell),
+                &ctx->cells.capacity, cell_len_min);
+    ctx->cells.len = ctx->cells.capacity;
+
+    ctx->stack_end = 0;
+    ctx->heap_end = stack_len_min;
+    ctx->gc_threshold = heap_len_min / 2;
+}
+
+// -----------------------------------------------
+// 参照セルリスト: スタック領域
+// -----------------------------------------------
+
+static void stack_push(Ctx *ctx, Cell cell) {
+    if (ctx->stack_end >= stack_len_min) {
+        eval_abort(ctx, "STACK OVERFLOW", eval_current_tok_i(ctx));
+        return;
+    }
+    ctx->cells.data[ctx->stack_end++] = cell;
+}
+
+static Cell stack_pop(Ctx *ctx) {
+    assert(ctx->stack_end >= 1);
+    ctx->stack_end--;
+
+    return ctx->cells.data[ctx->stack_end];
+}
+
+static const Cell s_cell_null = (Cell){.ty = ty_int, .val = 0};
+
+// -----------------------------------------------
+// 参照セルリスト: ヒープ領域
+// -----------------------------------------------
+
+typedef struct CellIndexPair {
+    int cell_l, cell_r;
+} CellIndexPair;
+
+static CellIndexPair heap_alloc(Ctx *ctx, int count) {
+    if (ctx->heap_end + count >= ctx->cells.len) {
+        // FIXME: ヒープを自動で拡張する。
+        eval_abort(ctx, "OUT OF MEMORY", eval_current_tok_i(ctx));
+        return (CellIndexPair){
+            .cell_l = stack_len_min,
+            .cell_r = stack_len_min + count,
+        };
+    }
+
+    int cell_l = ctx->heap_end;
+    int cell_r = ctx->heap_end + count;
+    ctx->heap_end += count;
+
+    if (ctx->cells.len - ctx->heap_end <= ctx->gc_threshold) {
+        ctx->does_gc = true;
+    }
+    return (CellIndexPair){
+        .cell_l = cell_l,
+        .cell_r = cell_r,
+    };
+}
+
+// -----------------------------------------------
+// フレームスタック
+// -----------------------------------------------
+
+static void frame_push(Ctx *ctx, int cmd_i, int env_i, int tok_i) {
+    vec_grow((void **)&ctx->frames.data, ctx->frames.len, &ctx->frames.capacity,
+             sizeof(Frame), 1);
+
+    int frame_i = ctx->frames.len++;
+    ctx->frames.data[frame_i] = (Frame){
+        .cmd_i = cmd_i,
+        .env_i = env_i,
+        .tok_i = tok_i,
+    };
+}
+
+static void frame_pop(Ctx *ctx) {
+    assert(ctx->frames.len >= 1);
+    ctx->frames.len--;
+}
+
+static Frame *frame_current(Ctx *ctx) {
+    assert(ctx->frames.len >= 1);
+    return &ctx->frames.data[ctx->frames.len - 1];
+}
+
+// -----------------------------------------------
+// 文字列リスト
+// -----------------------------------------------
+
+static int str_add(Ctx *ctx, const char *str) {
+    vec_grow((void **)&ctx->strs.data, ctx->strs.len, &ctx->strs.capacity,
+             sizeof(Str), 1);
+
+    int str_i = ctx->strs.len;
+    int size = strlen(str);
+    ctx->strs.data[str_i] = (Str){
+        .data = str_slice(str, 0, size),
+        .len = size,
+        .capacity = size,
+    };
+
+    return str_i;
+}
+
+static Str *str_get(Ctx *ctx, int str_i) {
+    assert(0 <= str_i && str_i < ctx->strs.len);
+    return &ctx->strs.data[str_i];
+}
+
+// -----------------------------------------------
+// 配列リスト
+// -----------------------------------------------
+
+static int array_add(Ctx *ctx, int len, int capacity) {
+    assert(0 <= len && len <= capacity);
+
+    vec_grow((void **)&ctx->arrays.data, ctx->arrays.len, &ctx->arrays.capacity,
+             sizeof(Array), 1);
+
+    CellIndexPair range = heap_alloc(ctx, capacity);
+
+    int array_i = ctx->arrays.len++;
+    ctx->arrays.data[array_i] = (Array){
+        .cell_l = range.cell_l,
+        .cell_r = range.cell_r,
+        .len = len,
+    };
+
+    return array_i;
+}
+
+static Array *array_get(Ctx *ctx, int array_i) {
+    assert(0 <= array_i && array_i < ctx->arrays.len);
+    return &ctx->arrays.data[array_i];
+}
+
+static void array_reserve(Ctx *ctx, int array_i, int new_len) {
+    Array *array = array_get(ctx, array_i);
+    if (new_len <= array->cell_r - array->cell_l) {
+        return;
+    }
+
+    assert(array->len <= new_len);
+
+    int new_capacity = array->len + new_len;
+    CellIndexPair new_range = heap_alloc(ctx, new_capacity);
+
+    memcpy(ctx->cells.data + new_range.cell_l, ctx->cells.data + array->cell_l,
+           (new_range.cell_r - new_range.cell_l) * sizeof(Cell));
+}
+
+static int array_ref(Ctx *ctx, int array_i, int index) {
+    Array *array = array_get(ctx, array_i);
+
+    if (!(0 <= index && index < array->len)) {
+        eval_abort(ctx, "配列の要素番号が無効です。", eval_current_tok_i(ctx));
+        return array->cell_l;
+    }
+
+    return array->cell_l + index;
+}
+
+static Cell array_get_item(Ctx *ctx, int array_i, int index) {
+    int cell_i = array_ref(ctx, array_i, index);
+    return ctx->cells.data[cell_i];
+}
+
+static void array_set_item(Ctx *ctx, int array_i, int index, Cell item) {
+    int cell_i = array_ref(ctx, array_i, index);
+    ctx->cells.data[cell_i] = item;
+}
+
+static void array_push(Ctx *ctx, int array_i, Cell item) {
+    Array *array = array_get(ctx, array_i);
+    int index = array->len;
+    array_reserve(ctx, array_i, index + 1);
+
+    array->len++;
+    array_set_item(ctx, array_i, index, item);
+}
+
+// -----------------------------------------------
+// 環境リスト
+// -----------------------------------------------
+
+static int env_add(Ctx *ctx, int parent_env_i, int fun_i) {
+    vec_grow((void **)&ctx->envs.data, ctx->envs.len, &ctx->envs.capacity,
+             sizeof(Env), 1);
+
+    Fun *fun = fun_get(ctx, fun_i);
+    Scope *scope = scope_get(ctx, fun->scope_i);
+    int array_i = array_add(ctx, scope->len, scope->len);
+
+    int env_i = ctx->envs.len++;
+    ctx->envs.data[env_i] = (Env){
+        .parent = parent_env_i,
+        .scope_i = fun->scope_i,
+        .array_i = array_i,
+    };
+    return env_i;
+}
+
+static Env *env_get(Ctx *ctx, int env_i) {
+    assert(0 <= env_i && env_i < ctx->envs.len);
+    return &ctx->envs.data[env_i];
+}
+
+static int env_find(Ctx *ctx, int source_env_i, int index, int scope_i) {
+    int env_i = source_env_i;
+    while (env_get(ctx, env_i)->scope_i != scope_i) {
+        assert(env_i != env_get(ctx, env_i)->parent);
+        env_i = env_get(ctx, env_i)->parent;
+    }
+
+    return array_ref(ctx, env_get(ctx, env_i)->array_i, index);
+}
+
+// -----------------------------------------------
+// クロージャリスト
+// -----------------------------------------------
+
+static int closure_add(Ctx *ctx, int fun_i, int env_i) {
+    vec_grow((void **)&ctx->closures.data, ctx->closures.len,
+             &ctx->closures.capacity, sizeof(Closure), 1);
+
+    int closure_i = ctx->closures.len++;
+    ctx->closures.data[closure_i] = (Closure){
+        .fun_i = fun_i,
+        .env_i = env_i,
+    };
+    return closure_i;
+}
+
+static Closure *closure_get(Ctx *ctx, int closure_i) {
+    assert(0 <= closure_i && closure_i < ctx->closures.len);
+    return &ctx->closures.data[closure_i];
+}
+
+// -----------------------------------------------
+// 評価
+// -----------------------------------------------
+
+#define defcmd Cmd *cmd = cmd_get(ctx, cmd_i)
+
+static Cell cell_from_bool(bool value) {
+    return value ? (Cell){.ty = ty_int, .val = 1} : s_cell_null;
+}
+
+static void eval_abort(Ctx *ctx, const char *message, int tok_i) {
+    Tok *tok = tok_get(ctx, tok_i);
+    err_add(ctx, message, tok->src_l, tok->src_r);
+
+    ctx->exit_code = 1;
+    ctx->stack_end = 0;
+    stack_push(ctx, (Cell){.ty = ty_int, .val = 1});
+    ctx->pc = ctx->cmd_i_exit;
+    ctx->does_gc = false;
+}
+
+static int eval_current_tok_i(Ctx *ctx) {
+    if (ctx->pc <= 0) {
+        return ctx->tok_i_eof;
+    }
+    return cmd_get(ctx, ctx->pc - 1)->tok_i;
+}
+
+static void eval_err(Ctx *ctx, int cmd_i) {
+    defcmd;
+    assert(cmd->kind == cmd_err);
+
+    eval_abort(ctx, cmd->str, cmd->tok_i);
+}
+
+static void eval_push_int(Ctx *ctx, int cmd_i) {
+    defcmd;
+    assert(cmd->kind == cmd_push_int);
+    stack_push(ctx, (Cell){.ty = ty_int, .val = cmd->x});
+}
+
+static void eval_push_str(Ctx *ctx, int cmd_i) {
+    defcmd;
+    assert(cmd->kind == cmd_push_str);
+
+    int str_i = str_add(ctx, cmd->str);
+    stack_push(ctx, (Cell){.ty = ty_str, .val = str_i});
+}
+
+static void eval_push_array(Ctx *ctx, int cmd_i) {
+    defcmd;
+    assert(cmd->kind == cmd_push_array);
+
+    int len = cmd->x;
+    int array_i = array_add(ctx, 0, len);
+    stack_push(ctx, (Cell){.ty = ty_array, .val = array_i});
+}
+
+static void eval_push_closure(Ctx *ctx, int cmd_i) {
+    defcmd;
+    assert(cmd->kind == cmd_push_closure);
+
+    int fun_i = cmd->x;
+    int env_i = frame_current(ctx)->env_i;
+    int closure_i = closure_add(ctx, fun_i, env_i);
+    stack_push(ctx, (Cell){.ty = ty_closure, .val = closure_i});
+}
+
+static void eval_push_extern(Ctx *ctx, int cmd_i) {
+    defcmd;
+    assert(cmd->kind == cmd_push_extern);
+
+    int extern_fun_i = cmd->x;
+    stack_push(ctx, (Cell){.ty = ty_extern, .val = extern_fun_i});
+}
+
+static void eval_local_var(Ctx *ctx, int cmd_i) {
+    defcmd;
+    assert(cmd->kind == cmd_local_var);
+
+    int index = cmd->x;
+    int env_i = frame_current(ctx)->env_i;
+    int cell_i = env_find(ctx, env_i, index, cmd->scope_i);
+    stack_push(ctx, (Cell){.ty = ty_cell, .val = cell_i});
+}
+
+static void eval_cell_get(Ctx *ctx, int cmd_i) {
+    defcmd;
+    assert(cmd->kind == cmd_cell_get);
+
+    Cell cell = stack_pop(ctx);
+    if (cell.ty != ty_cell) {
+        eval_abort(ctx, "左辺値が必要です。", cmd->tok_i);
+        return;
+    }
+
+    stack_push(ctx, ctx->cells.data[cell.val]);
+}
+
+static void eval_cell_set(Ctx *ctx, int cmd_i) {
+    defcmd;
+    assert(cmd->kind == cmd_cell_set);
+
+    Cell r_cell = stack_pop(ctx);
+    Cell l_cell = stack_pop(ctx);
+
+    if (l_cell.ty != ty_cell) {
+        eval_abort(ctx, "左辺値が必要です。", cmd->tok_i);
+        return;
+    }
+
+    ctx->cells.data[l_cell.val] = r_cell;
+    stack_push(ctx, r_cell);
+}
+
+static void eval_label(Ctx *ctx, int cmd_i) {}
+
+static void eval_jump_unless(Ctx *ctx, int cmd_i) {
+    defcmd;
+    assert(cmd->kind == cmd_jump_unless);
+
+    int label_i = cmd->x;
+
+    Cell cond = stack_pop(ctx);
+    if (cond.ty != ty_int) {
+        eval_abort(ctx, "条件は整数でなければいけません。", cmd->tok_i);
+        return;
+    }
+
+    if (cond.val == 0) {
+        ctx->pc = ctx->labels.data[label_i].cmd_i;
+        assert(ctx->cmds.data[ctx->pc].kind == cmd_label);
+    }
+}
+
+static void eval_pop(Ctx *ctx, int cmd_i) {
+    defcmd;
+    assert(cmd->kind == cmd_pop);
+
+    stack_pop(ctx);
+}
+
+static void eval_swap(Ctx *ctx, int cmd_i) {
+    defcmd;
+    assert(cmd->kind == cmd_swap);
+
+    // HELP: optimize
+    Cell first = stack_pop(ctx);
+    Cell second = stack_pop(ctx);
+    stack_push(ctx, first);
+    stack_push(ctx, second);
+}
+
+static void eval_dup(Ctx *ctx, int cmd_i) {
+    defcmd;
+    assert(cmd->kind == cmd_dup);
+
+    // HELP: optimize
+    Cell first = stack_pop(ctx);
+    stack_push(ctx, first);
+    stack_push(ctx, first);
+}
+
+static void eval_call(Ctx *ctx, int cmd_i) { unimplemented(); }
+
+static void eval_return(Ctx *ctx, int cmd_i) { unimplemented(); }
+
+static void eval_op(Ctx *ctx, int cmd_i) {
+    defcmd;
+    assert(cmd->kind == cmd_op);
+    OpKind op = (OpKind)cmd->x;
+
+    assert(op != op_semi);
+    assert(op != op_ne);
+    assert(op != op_le);
+    assert(op != op_gt);
+    assert(op != op_ge);
+
+    Cell r_cell = stack_pop(ctx);
+    Cell l_cell = stack_pop(ctx);
+    int ty = l_cell.ty;
+    int val = l_cell.val;
+
+    if (op == op_eq) {
+        if (ty != r_cell.ty) {
+            stack_push(ctx, s_cell_null);
+            return;
+        }
+        if (ty == ty_int) {
+            stack_push(ctx, cell_from_bool(val == r_cell.val));
+            return;
+        }
+        if (ty == ty_str) {
+            bool cmp =
+                strcmp(str_get(ctx, val)->data, str_get(ctx, r_cell.val)->data);
+            stack_push(ctx, cell_from_bool(cmp == 0));
+            return;
+        }
+        eval_abort(ctx, "型エラー", cmd->tok_i);
+        return;
+    }
+
+    if (op == op_lt) {
+        if (ty != r_cell.ty) {
+            stack_push(ctx, cell_from_bool(ty < r_cell.ty));
+            return;
+        }
+        if (ty == ty_int) {
+            stack_push(ctx, cell_from_bool(val < r_cell.val));
+            return;
+        }
+        if (ty == ty_str) {
+            int cmp =
+                strcmp(str_get(ctx, val)->data, str_get(ctx, r_cell.val)->data);
+            stack_push(ctx, cell_from_bool(cmp < 0));
+            return;
+        }
+        eval_abort(ctx, "型エラー", cmd->tok_i);
+        return;
+    }
+
+    if (op == op_index) {
+        unimplemented();
+    }
+    if (op == op_index_ref) {
+        unimplemented();
+    }
+    if (op == op_array_push) {
+        unimplemented();
+    }
+
+    if (ty != r_cell.ty) {
+        eval_abort(ctx, "型エラー", cmd->tok_i);
+        return;
+    }
+
+    if (op == op_add) {
+        if (ty == ty_int) {
+            stack_push(ctx, (Cell){.ty = ty_int, .val = val + r_cell.val});
+            return;
+        }
+        if (ty == ty_str) {
+            StringBuilder *sb = sb_new();
+            sb_append(sb, str_get(ctx, val)->data);
+            sb_append(sb, str_get(ctx, r_cell.val)->data);
+            int str_i = str_add(ctx, sb_to_str(sb));
+            stack_push(ctx, (Cell){.ty = ty_str, .val = str_i});
+            return;
+        }
+        eval_abort(ctx, "演算子 + をサポートしていません。", cmd->tok_i);
+        return;
+    }
+
+    if (op == op_sub) {
+        if (ty == ty_int) {
+            stack_push(ctx, (Cell){.ty = ty_int, .val = val - r_cell.val});
+            return;
+        }
+        eval_abort(ctx, "型エラー", cmd->tok_i);
+        return;
+    }
+    if (op == op_mul) {
+        if (ty == ty_int) {
+            stack_push(ctx, (Cell){.ty = ty_int, .val = val * r_cell.val});
+            return;
+        }
+        eval_abort(ctx, "型エラー", cmd->tok_i);
+        return;
+    }
+    if (op == op_div) {
+        if (ty == ty_int) {
+            stack_push(ctx, (Cell){.ty = ty_int, .val = val / r_cell.val});
+            return;
+        }
+        eval_abort(ctx, "型エラー", cmd->tok_i);
+        return;
+    }
+    if (op == op_mod) {
+        if (ty == ty_int) {
+            stack_push(ctx, (Cell){.ty = ty_int, .val = val % r_cell.val});
+            return;
+        }
+        eval_abort(ctx, "型エラー", cmd->tok_i);
+        return;
+    }
+
+    failwith("Unknown OpKind");
+}
+
+static void eval_cmds(Ctx *ctx) {
+    while (true) {
+        int cmd_i = ctx->pc++;
+        switch ((CmdKind)cmd_get(ctx, cmd_i)->kind) {
+        case cmd_push_int:
+            eval_push_int(ctx, cmd_i);
+            continue;
+        case cmd_push_str:
+            eval_push_str(ctx, cmd_i);
+            continue;
+        case cmd_push_array:
+            eval_push_array(ctx, cmd_i);
+            continue;
+        case cmd_push_closure:
+            eval_push_closure(ctx, cmd_i);
+            continue;
+        case cmd_push_extern:
+            eval_push_extern(ctx, cmd_i);
+            continue;
+        case cmd_local_var:
+            eval_local_var(ctx, cmd_i);
+            continue;
+        case cmd_cell_get:
+            eval_cell_get(ctx, cmd_i);
+            continue;
+        case cmd_cell_set:
+            eval_cell_set(ctx, cmd_i);
+            continue;
+        case cmd_label:
+            eval_label(ctx, cmd_i);
+            continue;
+        case cmd_jump_unless:
+            eval_jump_unless(ctx, cmd_i);
+            continue;
+        case cmd_pop:
+            eval_pop(ctx, cmd_i);
+            continue;
+        case cmd_swap:
+            eval_swap(ctx, cmd_i);
+            continue;
+        case cmd_dup:
+            eval_dup(ctx, cmd_i);
+            continue;
+        case cmd_call:
+            eval_call(ctx, cmd_i);
+            continue;
+        case cmd_return:
+            eval_return(ctx, cmd_i);
+            continue;
+        case cmd_op:
+            eval_op(ctx, cmd_i);
+            continue;
+        case cmd_err:
+            eval_err(ctx, cmd_i);
+            continue;
+        case cmd_exit: {
+            Cell cell = stack_pop(ctx);
+            if (cell.ty != ty_int) {
+                eval_abort(ctx, "終了コードは整数値でなければいけません。",
+                           eval_current_tok_i(ctx));
+                continue;
+            }
+            ctx->exit_code = cell.val;
+            return;
+        }
+        default:
+            failwith("Unknown CmdKind");
+        }
+    }
+}
+
+static void eval(Ctx *ctx) {
+    ctx->pc = ctx->cmd_i_entry;
+    ctx->does_gc = false;
+    ctx->exit_code = 1;
+
+    cell_initialize(ctx);
+
+    // グローバル環境を生成する。
+    int env_i_global = env_add(ctx, -1, ctx->fun_i_main);
+    frame_push(ctx, ctx->cmd_i_exit, env_i_global, ctx->tok_i_eof);
+
+    eval_cmds(ctx);
+}
+
+// ###############################################
 // テスト
 // ###############################################
 
@@ -1838,7 +2461,6 @@ const char *negi_lang_gen_dump(const char *src) {
     gen(ctx);
 
     StringBuilder *sb = sb_new();
-    int prev_tok_i = -1;
     for (int i = 0; i < ctx->cmds.len; i++) {
         const Cmd *cmd = &ctx->cmds.data[i];
 
@@ -1864,6 +2486,19 @@ const char *negi_lang_gen_dump(const char *src) {
         }
     }
     return sb_to_str(sb);
+}
+
+void negi_lang_eval_for_testing(const char *src, int *exit_code,
+                                       const char **output) {
+    Ctx *ctx = ctx_new(src);
+
+    tokenize(ctx);
+    parse(ctx);
+    gen(ctx);
+    eval(ctx);
+
+    *exit_code = ctx->exit_code;
+    *output = err_summary(ctx);
 }
 
 void _trace(const char *file_name, int line, const char *message) {
