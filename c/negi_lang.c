@@ -3,7 +3,6 @@
 #include <assert.h>
 #include <inttypes.h>
 #include <stdarg.h>
-#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -59,6 +58,25 @@ static void mem_reserve(void **data, int count, int unit, int *capacity,
 
     *data = new_data;
     *capacity = new_capacity;
+}
+
+// ###############################################
+// 汎用: ベクタ
+// ###############################################
+
+static void vec_grow(void **data, int len, int *capacity, int unit,
+                     int grow_size) {
+    assert(data != NULL);
+    assert(capacity != NULL);
+    assert(0 <= len && len <= *capacity);
+    assert(grow_size >= 0);
+
+    if (len + grow_size > *capacity) {
+        int new_capacity = *capacity * 2 + grow_size;
+        mem_reserve(data, len, unit, capacity, new_capacity);
+    }
+
+    assert(len + grow_size <= *capacity);
 }
 
 // ###############################################
@@ -155,10 +173,7 @@ static VecInt *vec_int_new() {
 }
 
 static void vec_int_push(VecInt *vec, int value) {
-    if (vec->len == vec->capacity) {
-        mem_reserve((void **)&vec->data, vec->len, sizeof(int), &vec->capacity,
-                    1 + vec->capacity * 2);
-    }
+    vec_grow((void **)&vec->data, vec->len, &vec->capacity, sizeof(int), 1);
     assert(vec->len + 1 <= vec->capacity);
 
     vec->data[vec->len++] = value;
@@ -193,10 +208,8 @@ static void err_add(Ctx *ctx, const char *message, int src_l, int src_r) {
     assert(message != 0 && 0 <= src_l && src_l <= src_r &&
            src_r <= ctx->src_len);
 
-    if (ctx->errs.capacity == ctx->errs.len) {
-        mem_reserve((void **)&ctx->errs.data, ctx->errs.len, sizeof(struct Err),
-                    &ctx->errs.capacity, 1 + ctx->errs.capacity * 2);
-    }
+    vec_grow((void **)&ctx->errs.data, ctx->errs.len, &ctx->errs.capacity,
+             sizeof(Err), 1);
 
     int err_i = ctx->errs.len++;
 
@@ -286,10 +299,8 @@ static bool is_op_char(char c) { return strchr("+-*/%&|^~!=<>.?:", c) != NULL; }
 static void tok_add(Ctx *ctx, enum TokKind kind, int src_l, int src_r) {
     assert(src_l <= src_r && (kind == tok_eof || src_l < src_r));
 
-    if (ctx->toks.len == ctx->toks.capacity) {
-        mem_reserve((void **)&ctx->toks.data, ctx->toks.len, sizeof(struct Tok),
-                    &ctx->toks.capacity, 1 + ctx->toks.capacity * 2);
-    }
+    vec_grow((void **)&ctx->toks.data, ctx->toks.len, &ctx->toks.capacity,
+             sizeof(Tok), 1);
     assert(ctx->toks.len < ctx->toks.capacity);
 
     int tok_i = ctx->toks.len++;
@@ -345,6 +356,8 @@ static enum TokKind tok_text_to_kind(const char *text) {
 // -----------------------------------------------
 
 static void tokenize(Ctx *ctx) {
+    ctx->tok_i_root = ctx->toks.len;
+
     int r = 0;
 
     while (r < ctx->src_len) {
@@ -446,6 +459,7 @@ static void tokenize(Ctx *ctx) {
     }
 
     assert(r == ctx->src_len);
+    ctx->tok_i_eof = ctx->toks.len;
     tok_add(ctx, tok_eof, r, r);
     return;
 }
@@ -484,11 +498,8 @@ typedef struct SubExpPair {
 } SubExpPair;
 
 static struct SubExpPair subexp_add(Ctx *ctx, int *exp_is, int exp_i_len) {
-    if (ctx->subexps.len + exp_i_len > ctx->subexps.capacity) {
-        mem_reserve((void **)&ctx->subexps.data, ctx->subexps.len,
-                    sizeof(SubExp), &ctx->subexps.capacity,
-                    1 + ctx->subexps.capacity * 2 + exp_i_len);
-    }
+    vec_grow((void **)&ctx->subexps.data, ctx->subexps.len,
+             &ctx->subexps.capacity, sizeof(SubExp), exp_i_len);
     assert(ctx->subexps.len + exp_i_len <= ctx->subexps.capacity);
 
     int subexp_l = ctx->subexps.len;
@@ -507,15 +518,18 @@ static struct SubExpPair subexp_add(Ctx *ctx, int *exp_is, int exp_i_len) {
     };
 }
 
+static SubExp *subexp_get(Ctx *ctx, int subexp_i) {
+    assert(0 <= subexp_i && subexp_i < ctx->subexps.len);
+    return &ctx->subexps.data[subexp_i];
+}
+
 // -----------------------------------------------
 // 式リスト
 // -----------------------------------------------
 
 static int exp_add(Ctx *ctx, ExpKind kind, int tok_i) {
-    if (ctx->exps.len == ctx->exps.capacity) {
-        mem_reserve((void **)&ctx->exps.data, ctx->exps.len, sizeof(Exp),
-                    &ctx->exps.capacity, 1 + ctx->exps.capacity * 2);
-    }
+    vec_grow((void **)&ctx->exps.data, ctx->exps.len, &ctx->exps.capacity,
+             sizeof(Exp), 1);
 
     int exp_i = ctx->exps.len++;
     ctx->exps.data[exp_i] = (Exp){
@@ -528,6 +542,10 @@ static int exp_add(Ctx *ctx, ExpKind kind, int tok_i) {
 static Exp *exp_get(Ctx *ctx, int exp_i) {
     assert(0 <= exp_i && exp_i < ctx->exps.len);
     return &ctx->exps.data[exp_i];
+}
+
+static ExpKind exp_kind(Ctx *ctx, int exp_i) {
+    return exp_get(ctx, exp_i)->kind;
 }
 
 static int exp_add_err(Ctx *ctx, const char *message, int tok_i) {
@@ -550,8 +568,10 @@ static int exp_add_str(Ctx *ctx, ExpKind kind, const char *value, int tok_i) {
 
 static int exp_add_bin(Ctx *ctx, OpKind op, int exp_l, int exp_r, int tok_i) {
     int exp_i = exp_add(ctx, exp_op, tok_i);
-    exp_get(ctx, exp_i)->exp_l = exp_l;
-    exp_get(ctx, exp_i)->exp_r = exp_r;
+    Exp *exp = exp_get(ctx, exp_i);
+    exp->int_value = (int)op;
+    exp->exp_l = exp_l;
+    exp->exp_r = exp_r;
     return exp_i;
 }
 
@@ -813,9 +833,7 @@ static int parse_prefix(Ctx *ctx, int *tok_i) {
 }
 
 static OpKind parse_op(Ctx *ctx, int *tok_i, OpLevel op_level) {
-    if (tok_kind(ctx, *tok_i) != tok_op) {
-        return op_err;
-    }
+    assert(tok_kind(ctx, *tok_i) == tok_op);
 
     for (int i = 0; i < array_len(op_table); i++) {
         if (op_table[i].level != op_level) {
@@ -1077,8 +1095,645 @@ static void parse(Ctx *ctx) {
 }
 
 // ###############################################
-// 実行
+// コード生成
 // ###############################################
+
+// -----------------------------------------------
+// 演算子
+// -----------------------------------------------
+
+typedef struct SetOpOpPair {
+    OpKind set_op;
+    OpKind op;
+} SetOpOpPair;
+
+static const SetOpOpPair set_ops[] = {
+    {op_set_add, op_add}, {op_set_sub, op_sub}, {op_set_mul, op_mul},
+    {op_set_div, op_div}, {op_set_mod, op_mod},
+};
+
+static bool op_find_op_by_set_op(OpKind set_op, OpKind *op) {
+    for (int i = 0; i < array_len(set_ops); i++) {
+        if (set_ops[i].set_op == set_op) {
+            *op = set_ops[i].op;
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool op_is_set_op(OpKind op) {
+    OpKind result;
+    return op_find_op_by_set_op(op, &result);
+}
+
+// -----------------------------------------------
+// ラベルリスト
+// -----------------------------------------------
+
+static int label_add(Ctx *ctx) {
+    vec_grow((void **)&ctx->labels.data, ctx->labels.len, &ctx->labels.capacity,
+             sizeof(Label), 1);
+
+    int label_i = ctx->labels.len++;
+    ctx->labels.data[label_i].cmd_i = -1;
+    return label_i;
+}
+
+static Label *label_get(Ctx *ctx, int label_i) {
+    assert(0 <= label_i && label_i < ctx->labels.len);
+    return &ctx->labels.data[label_i];
+}
+
+static void label_set(Ctx *ctx, int label_i, int cmd_i) {
+    Label *label = label_get(ctx, label_i);
+    assert(label->cmd_i < 0);
+
+    label->cmd_i = cmd_i;
+}
+
+// -----------------------------------------------
+// スコープリスト
+// -----------------------------------------------
+
+static int scope_add(Ctx *ctx, int parent, int tok_i) {
+    vec_grow((void **)&ctx->scopes.data, ctx->scopes.len, &ctx->scopes.capacity,
+             sizeof(Scope), 1);
+
+    int scope_i = ctx->scopes.len++;
+    ctx->scopes.data[scope_i] = (Scope){
+        .parent = parent,
+        .tok_i = tok_i,
+    };
+    return scope_i;
+}
+
+static Scope *scope_get(Ctx *ctx, int scope_i) {
+    assert(0 <= scope_i && scope_i < ctx->scopes.len);
+    return &ctx->scopes.data[scope_i];
+}
+
+static int scope_add_global(Ctx *ctx, int tok_i) {
+    return scope_add(ctx, -1, tok_i);
+}
+
+static void scope_push(Ctx *ctx, int tok_i) {
+    int scope_i = scope_add(ctx, ctx->scope_i_current, tok_i);
+    ctx->scope_i_current = scope_i;
+}
+
+static void scope_pop(Ctx *ctx, int tok_i) {
+    Scope *scope = scope_get(ctx, ctx->scope_i_current);
+
+    assert(scope->parent >= 0);
+    ctx->scope_i_current = scope->parent;
+}
+
+// -----------------------------------------------
+// ローカルリスト
+// -----------------------------------------------
+
+static int local_add(Ctx *ctx, const char *ident, int scope_i, int tok_i) {
+    vec_grow((void **)&ctx->locals.data, ctx->locals.len, &ctx->locals.capacity,
+             sizeof(Local), 1);
+
+    int index = scope_get(ctx, scope_i)->len++;
+
+    int local_i = ctx->locals.len++;
+    ctx->locals.data[local_i] = (Local){
+        .ident = ident,
+        .scope_i = scope_i,
+        .index = index,
+        .tok_i = tok_i,
+    };
+    return local_i;
+}
+
+static Local *local_get(Ctx *ctx, int local_i) {
+    assert(0 <= local_i && local_i < ctx->locals.len);
+    return &ctx->locals.data[local_i];
+}
+
+static int local_add_var(Ctx *ctx, const char *ident, int tok_i) {
+    return local_add(ctx, ident, ctx->scope_i_current, tok_i);
+}
+
+static bool local_find_var(Ctx *ctx, const char *ident, int tok_i,
+                           int *local_i) {
+    int scope_i = ctx->scope_i_current;
+    while (true) {
+        for (int i = 0; i < ctx->locals.len; i++) {
+            Local *local = local_get(ctx, i);
+            if (local->scope_i != scope_i) {
+                continue;
+            }
+            if (strcmp(local->ident, ident) != 0) {
+                continue;
+            }
+            *local_i = i;
+            return true;
+        }
+
+        Scope *scope = scope_get(ctx, scope_i);
+        assert(scope_i != scope->parent);
+        scope_i = scope->parent;
+    }
+    return false;
+}
+
+// -----------------------------------------------
+// 関数リスト
+// -----------------------------------------------
+
+static int fun_add(Ctx *ctx, FunKind kind, const char *name) {
+    vec_grow((void **)&ctx->funs.data, ctx->funs.len, &ctx->funs.capacity,
+             sizeof(Fun), 1);
+
+    int fun_i = ctx->funs.len++;
+    ctx->funs.data[fun_i] = (Fun){
+        .kind = kind,
+        .name = name,
+    };
+    return fun_i;
+}
+
+static Fun *fun_get(Ctx *ctx, int fun_i) {
+    assert(0 <= fun_i && fun_i < ctx->funs.len);
+    return &ctx->funs.data[fun_i];
+}
+
+static int fun_add_closure(Ctx *ctx, int scope_i, int label_i) {
+    int fun_i =
+        fun_add(ctx, fun_kind_closure, str_format("<anonymous: %d>", label_i));
+
+    Fun *fun = fun_get(ctx, fun_i);
+    fun->scope_i = scope_i;
+    fun->label_i = label_i;
+
+    return fun_i;
+}
+
+// -----------------------------------------------
+// 外部関数リスト
+// -----------------------------------------------
+
+static int extern_fun_add(Ctx *ctx, const char *name, extern_fun_t fun) {
+    vec_grow((void **)&ctx->extern_funs.data, ctx->extern_funs.len,
+             &ctx->extern_funs.capacity, sizeof(ExternFun), 1);
+
+    int extern_fun_i = ctx->extern_funs.len++;
+    ctx->extern_funs.data[extern_fun_i] = (ExternFun){
+        .name = name,
+        .fun = fun,
+    };
+    return extern_fun_i;
+}
+
+static bool extern_fun_find(Ctx *ctx, const char *name, int *extern_fun_i) {
+    for (int i = 0; i < ctx->extern_funs.len; i++) {
+        if (strcmp(ctx->extern_funs.data[i].name, name) == 0) {
+            *extern_fun_i = i;
+            return true;
+        }
+    }
+    return false;
+}
+
+// -----------------------------------------------
+// ループスタック
+// -----------------------------------------------
+
+static int loop_push(Ctx *ctx, int break_label_i) {
+    vec_grow((void **)&ctx->loops.data, ctx->loops.len, &ctx->loops.capacity,
+             sizeof(Loop), 1);
+
+    int loop_i = ctx->loops.len++;
+    ctx->loops.data[loop_i] = (Loop){
+        .break_label_i = break_label_i,
+    };
+
+    return loop_i;
+}
+
+static void loop_pop(Ctx *ctx) {
+    assert(ctx->loops.len >= 1);
+    ctx->loops.len--;
+}
+
+// -----------------------------------------------
+// 命令リスト
+// -----------------------------------------------
+
+static int cmd_do_add(Ctx *ctx, Cmd cmd) {
+    vec_grow((void **)&ctx->cmds.data, ctx->cmds.len, &ctx->cmds.capacity,
+             sizeof(Cmd), 1);
+
+    int cmd_i = ctx->cmds.len++;
+    ctx->cmds.data[cmd_i] = cmd;
+    return cmd_i;
+}
+
+static Cmd *cmd_get(Ctx *ctx, int cmd_i) {
+    assert(0 <= cmd_i && cmd_i < ctx->cmds.len);
+    return &ctx->cmds.data[cmd_i];
+}
+
+static void cmd_add_err(Ctx *ctx, const char *message, int tok_i) {
+    cmd_do_add(ctx, (Cmd){
+                        .kind = cmd_err,
+                        .str = message,
+                        .tok_i = tok_i,
+                    });
+}
+
+static void cmd_add_int(Ctx *ctx, CmdKind kind, int value, int tok_i) {
+    cmd_do_add(ctx, (Cmd){
+                        .kind = kind,
+                        .x = value,
+                        .tok_i = tok_i,
+                    });
+}
+
+static void cmd_add_str(Ctx *ctx, CmdKind kind, const char *str, int tok_i) {
+    cmd_do_add(ctx, (Cmd){
+                        .kind = kind,
+                        .str = str,
+                        .tok_i = tok_i,
+                    });
+}
+
+static void cmd_add(Ctx *ctx, CmdKind kind, int tok_i) {
+    cmd_add_int(ctx, kind, 0, tok_i);
+}
+
+static void cmd_add_local_var(Ctx *ctx, int index, int scope_i, int tok_i) {
+    cmd_do_add(ctx, (Cmd){
+                        .kind = cmd_local_var,
+                        .x = index,
+                        .scope_i = scope_i,
+                        .tok_i = tok_i,
+                    });
+}
+
+static void cmd_add_op(Ctx *ctx, OpKind op, int tok_i) {
+    cmd_add_int(ctx, cmd_op, op, tok_i);
+}
+
+static void cmd_add_label(Ctx *ctx, int label_i, int tok_i) {
+    assert(0 <= label_i && label_i < ctx->labels.len);
+    cmd_add_int(ctx, cmd_label, label_i, tok_i);
+}
+
+static void cmd_add_jump_unless(Ctx *ctx, int label_i, int tok_i) {
+    assert(0 <= label_i && label_i < ctx->labels.len);
+    cmd_add_int(ctx, cmd_jump_unless, label_i, tok_i);
+}
+
+static void cmd_add_null(Ctx *ctx, int tok_i) {
+    cmd_add_int(ctx, cmd_push_int, 0, tok_i);
+}
+
+// !x ---> x == null
+static void cmd_add_negate(Ctx *ctx, int tok_i) {
+    cmd_add_null(ctx, tok_i);
+    cmd_add_op(ctx, op_eq, tok_i);
+}
+
+// goto l ---> null; jump_unless l
+static void cmd_add_goto(Ctx *ctx, int label_i, int tok_i) {
+    cmd_add_null(ctx, tok_i);
+    cmd_add_jump_unless(ctx, label_i, tok_i);
+}
+
+// -----------------------------------------------
+// コード生成
+// -----------------------------------------------
+
+#define xkind exp_kind(ctx, exp_i)
+#define defexp Exp *exp = exp_get(ctx, exp_i)
+
+static void gen_exp(Ctx *ctx, int exp_i);
+
+static void gen_lval(Ctx *ctx, int exp_i);
+
+static void gen_ident(Ctx *ctx, int exp_i, bool lval) {
+    defexp;
+    assert(exp->kind == exp_ident);
+    const char *name = exp->str_value;
+    int tok_i = exp->tok_i;
+
+    int local_i;
+    if (local_find_var(ctx, name, tok_i, &local_i)) {
+        Local *local = local_get(ctx, local_i);
+        cmd_add_local_var(ctx, local->index, local->scope_i, tok_i);
+
+        if (!lval) {
+            cmd_add(ctx, cmd_cell_get, tok_i);
+        }
+        return;
+    }
+
+    if (!lval) {
+        int extern_fun_i;
+        if (extern_fun_find(ctx, name, &extern_fun_i)) {
+            cmd_add_int(ctx, cmd_push_extern, extern_fun_i, tok_i);
+            return;
+        }
+    }
+
+    cmd_add_err(ctx, "未定義の変数を使用しています。", tok_i);
+}
+
+static void gen_array(Ctx *ctx, int exp_i) {
+    defexp;
+    assert(exp->kind == exp_array);
+    int len = exp->subexp_r - exp->subexp_l;
+    int tok_i = exp->tok_i;
+
+    cmd_add_int(ctx, cmd_push_array, len, tok_i);
+    for (int i = exp->subexp_l; i < exp->subexp_r; i++) {
+        gen_exp(ctx, subexp_get(ctx, i)->exp_i);
+        cmd_add_op(ctx, op_array_push, tok_i);
+    }
+}
+
+static void gen_call(Ctx *ctx, int exp_i) {
+    defexp;
+    assert(exp->kind == exp_call);
+    int len = exp->subexp_r - exp->subexp_l;
+    int tok_i = exp->tok_i;
+
+    gen_exp(ctx, exp->exp_l);
+    for (int i = exp->subexp_l; i < exp->subexp_r; i++) {
+        gen_exp(ctx, subexp_get(ctx, i)->exp_i);
+    }
+    cmd_add_int(ctx, cmd_call, len, tok_i);
+}
+
+static void gen_set(Ctx *ctx, int exp_i) {
+    defexp;
+    assert(exp->kind == exp_op);
+    assert(exp->int_value == op_set);
+
+    gen_lval(ctx, exp->exp_l);
+    gen_exp(ctx, exp->exp_r);
+    cmd_add(ctx, cmd_cell_set, exp->tok_i);
+}
+
+static void gen_set_op(Ctx *ctx, int exp_i) {
+    defexp;
+    assert(exp->kind == exp_op);
+    OpKind set_op = (OpKind)exp->int_value;
+    int tok_i = exp->tok_i;
+
+    OpKind op;
+    int ok = op_find_op_by_set_op(set_op, &op);
+    assert(ok);
+
+    gen_lval(ctx, exp->exp_l);
+
+    // 左辺の参照セルを複製して値を取り出す。
+    // スタック上は、左辺の参照セル、左辺の値、という並びになる。
+    cmd_add(ctx, cmd_dup, tok_i);
+    cmd_add(ctx, cmd_cell_get, tok_i);
+
+    // スタック上は、左辺の値、右辺の値、という並びになる。
+    gen_exp(ctx, exp->exp_r);
+    cmd_add_op(ctx, op, tok_i);
+
+    // スタックの上は、左辺の参照セル、演算結果、という並びになる。
+    cmd_add(ctx, cmd_cell_set, tok_i);
+}
+
+static void gen_op(Ctx *ctx, int exp_i, bool lval) {
+    defexp;
+    assert(exp->kind == exp_op);
+    OpKind op = exp->int_value;
+    int tok_i = exp->tok_i;
+
+    if (op == op_semi) {
+        gen_exp(ctx, exp->exp_l);
+        cmd_add(ctx, cmd_pop, tok_i);
+        gen_exp(ctx, exp->exp_r);
+        return;
+    }
+    if (op == op_set) {
+        gen_set(ctx, exp_i);
+        return;
+    }
+    if (op_is_set_op(op)) {
+        gen_set_op(ctx, exp_i);
+        return;
+    }
+
+    gen_exp(ctx, exp->exp_l);
+    gen_exp(ctx, exp->exp_r);
+
+    if (op == op_ne) {
+        // l != r ---> !(l == r)
+        cmd_add_op(ctx, op_eq, tok_i);
+        cmd_add_negate(ctx, tok_i);
+        return;
+    }
+    if (op == op_le) {
+        // l <= r ---> !(r < l)
+        cmd_add(ctx, cmd_swap, tok_i);
+        cmd_add_op(ctx, op_lt, tok_i);
+        cmd_add_negate(ctx, tok_i);
+        return;
+    }
+    if (op == op_gt) {
+        // l > r ---> r < l
+        cmd_add(ctx, cmd_swap, tok_i);
+        cmd_add_op(ctx, op_lt, tok_i);
+        return;
+    }
+    if (op == op_ge) {
+        // l >= r ---> !(l < r)
+        cmd_add_op(ctx, op_lt, tok_i);
+        cmd_add_negate(ctx, tok_i);
+        return;
+    }
+
+    if (op == op_index && lval) {
+        cmd_add_op(ctx, op_index_ref, tok_i);
+        return;
+    }
+
+    cmd_add_op(ctx, op, tok_i);
+}
+
+static void gen_fun(Ctx *ctx, int exp_i) { failwith("unimplemented"); }
+
+static void gen_let(Ctx *ctx, int exp_i) {
+    defexp;
+    assert(exp->kind == exp_let);
+    int ident_tok_i = exp->int_value;
+    const char *ident = tok_text(ctx, ident_tok_i);
+
+    gen_exp(ctx, exp->exp_l);
+
+    int local_i = local_add_var(ctx, ident, ident_tok_i);
+    Local *local = local_get(ctx, local_i);
+
+    // 右辺の値、左辺の参照セル、という順番でスタックに積む。
+    // 代入式とは逆。swap が必要になる。
+    cmd_add_local_var(ctx, local->index, local->scope_i, exp->tok_i);
+    cmd_add(ctx, cmd_swap, exp->tok_i);
+    cmd_add(ctx, cmd_cell_set, exp->tok_i);
+}
+
+static void gen_if(Ctx *ctx, int exp_i) {
+    defexp;
+    assert(exp->kind == exp_if);
+    int tok_i = exp->tok_i;
+
+    int else_label_i = label_add(ctx);
+    int end_label_i = label_add(ctx);
+
+    // do cond; if false, goto l_else
+    gen_exp(ctx, exp->exp_cond);
+    cmd_add_jump_unless(ctx, else_label_i, tok_i);
+
+    // do then_clause; goto l_end
+    gen_exp(ctx, exp->exp_l);
+    cmd_add_goto(ctx, end_label_i, tok_i);
+
+    // l_else: do else_clause
+    cmd_add_label(ctx, else_label_i, tok_i);
+    gen_exp(ctx, exp->exp_r);
+
+    // l_end:
+    cmd_add_label(ctx, end_label_i, tok_i);
+}
+
+static void gen_while(Ctx *ctx, int exp_i) { failwith("unimplemented"); }
+
+static void gen_break(Ctx *ctx, int exp_i) { failwith("unimplemented"); }
+
+static void gen_return(Ctx *ctx, int exp_i) { failwith("unimplemented"); }
+
+static void gen_lval(Ctx *ctx, int exp_i) {
+    defexp;
+
+    const bool lval = true;
+
+    switch (exp->kind) {
+    case exp_ident:
+        return gen_ident(ctx, exp_i, lval);
+    case exp_op: {
+        if ((OpKind)exp->int_value != op_index) {
+            break;
+        }
+        return gen_op(ctx, exp_i, lval);
+    }
+    default:
+        break;
+    }
+
+    cmd_add_err(ctx, "左辺値が必要です。", exp->tok_i);
+}
+
+static void gen_exp(Ctx *ctx, int exp_i) {
+    defexp;
+
+    const bool lval = false;
+
+    switch (exp->kind) {
+    case exp_int: {
+        cmd_add_int(ctx, cmd_push_int, exp->int_value, exp->tok_i);
+        return;
+    }
+    case exp_str: {
+        cmd_add_str(ctx, cmd_push_str, exp->str_value, exp->tok_i);
+        return;
+    }
+    case exp_ident:
+        gen_ident(ctx, exp_i, lval);
+        return;
+    case exp_array:
+        gen_array(ctx, exp_i);
+        return;
+    case exp_call:
+        gen_call(ctx, exp_i);
+        return;
+    case exp_op:
+        gen_op(ctx, exp_i, lval);
+        return;
+    case exp_fun:
+        gen_fun(ctx, exp_i);
+        return;
+    case exp_let:
+        gen_let(ctx, exp_i);
+        return;
+    case exp_if:
+        gen_if(ctx, exp_i);
+        return;
+    case exp_while:
+        gen_while(ctx, exp_i);
+        return;
+    case exp_break:
+        gen_break(ctx, exp_i);
+        return;
+    case exp_return:
+        gen_return(ctx, exp_i);
+        return;
+    case exp_err: {
+        cmd_add_err(ctx, exp->str_value, exp->tok_i);
+        return;
+    }
+    default:
+        failwith("Unknown ExpKind");
+    }
+}
+
+static void gen_resolve_labels(Ctx *ctx) {
+    for (int i = 0; i < ctx->cmds.len; i++) {
+        const int cmd_i = i;
+        Cmd *cmd = &ctx->cmds.data[cmd_i];
+
+        if (cmd->kind == cmd_label) {
+            label_set(ctx, cmd->x, cmd_i);
+        }
+    }
+
+    for (int i = 0; i < ctx->labels.len; i++) {
+        if (ctx->labels.data[i].cmd_i < 0) {
+            failwith("Unresolved label");
+        }
+    }
+}
+
+static void gen(Ctx *ctx) {
+    ctx->scope_i_global = scope_add_global(ctx, ctx->tok_i_eof);
+    ctx->scope_i_current = ctx->scope_i_global;
+
+    int main_label_i = label_add(ctx);
+    cmd_add_label(ctx, main_label_i, ctx->tok_i_eof);
+
+    ctx->cmd_i_entry = ctx->cmds.len;
+    gen_exp(ctx, ctx->exp_i_root);
+
+    ctx->cmd_i_exit = ctx->cmds.len;
+    cmd_add(ctx, cmd_exit, ctx->tok_i_eof);
+
+    ctx->fun_i_main = fun_add_closure(ctx, ctx->scope_i_global, main_label_i);
+
+    gen_resolve_labels(ctx);
+}
+
+// ###############################################
+// テスト
+// ###############################################
+
+Ctx *ctx_new(const char *src) {
+    Ctx *ctx = mem_alloc(1, sizeof(Ctx));
+
+    *ctx = (Ctx){};
+
+    src_initialize(ctx, src);
+    return ctx;
+}
 
 void negi_lang_test_util() {
     StringBuilder *sb = sb_new();
@@ -1088,11 +1743,8 @@ void negi_lang_test_util() {
 }
 
 const char *negi_lang_tokenize_dump(const char *src) {
-    Ctx *ctx = mem_alloc(1, sizeof(Ctx));
+    Ctx *ctx = ctx_new(src);
 
-    *ctx = (Ctx){};
-
-    src_initialize(ctx, src);
     tokenize(ctx);
 
     StringBuilder *sb = sb_new();
@@ -1168,16 +1820,49 @@ static void dump_exp(Ctx *ctx, int exp_i, StringBuilder *out) {
 }
 
 const char *negi_lang_parse_dump(const char *src) {
-    Ctx *ctx = mem_alloc(1, sizeof(Ctx));
+    Ctx *ctx = ctx_new(src);
 
-    *ctx = (Ctx){};
-
-    src_initialize(ctx, src);
     tokenize(ctx);
     parse(ctx);
 
     StringBuilder *sb = sb_new();
     dump_exp(ctx, ctx->exp_i_root, sb);
+    return sb_to_str(sb);
+}
+
+const char *negi_lang_gen_dump(const char *src) {
+    Ctx *ctx = ctx_new(src);
+
+    tokenize(ctx);
+    parse(ctx);
+    gen(ctx);
+
+    StringBuilder *sb = sb_new();
+    int prev_tok_i = -1;
+    for (int i = 0; i < ctx->cmds.len; i++) {
+        const Cmd *cmd = &ctx->cmds.data[i];
+
+        const char *text = tok_text(ctx, cmd->tok_i);
+        if (strcmp(text, "") != 0) {
+            sb_append(sb, str_format("// %s\n", text));
+        }
+
+        switch (cmd->kind) {
+        case cmd_err:
+            sb_append(sb, str_format("  err \"%s\"\n", cmd->str));
+            break;
+        case cmd_label:
+            sb_append(sb, str_format("%d:\n", cmd->x));
+            break;
+        default:
+            if (cmd->str != NULL) {
+                sb_append(sb, str_format("  %d \"%s\"\n", cmd->kind, cmd->str));
+                break;
+            }
+            sb_append(sb, str_format("  %d %d\n", cmd->kind, cmd->x));
+            break;
+        }
+    }
     return sb_to_str(sb);
 }
 

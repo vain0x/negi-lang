@@ -1,6 +1,8 @@
 #ifndef NEGI_LANG_INTERNALS_H
 #define NEGI_LANG_INTERNALS_H
 
+#include <stdbool.h>
+
 typedef struct NegiLangContext Ctx;
 
 // ###############################################
@@ -376,8 +378,6 @@ typedef struct Toks {
     int capacity;
 } Toks;
 
-typedef int TokId;
-
 // ###############################################
 // 構文解析
 // ###############################################
@@ -418,6 +418,151 @@ typedef struct Exps {
 } Exps;
 
 // ###############################################
+// コード生成
+// ###############################################
+
+// -----------------------------------------------
+// ラベルリスト
+// -----------------------------------------------
+
+typedef struct Label {
+    int cmd_i;
+} Label;
+
+typedef struct VecLabel {
+    Label *data;
+    int len;
+    int capacity;
+} VecLabel;
+
+// -----------------------------------------------
+// スコープリスト
+// -----------------------------------------------
+
+typedef struct Scope {
+    // 親スコープのスコープ番号 (トップレベルなら -1)
+    int parent;
+
+    // 識別子の個数
+    int len;
+
+    int tok_i;
+} Scope;
+
+typedef struct VecScope {
+    Scope *data;
+    int len;
+    int capacity;
+} VecScope;
+
+// -----------------------------------------------
+// ローカルリスト
+// -----------------------------------------------
+
+// スコープに属する識別子。
+typedef struct Local {
+    const char *ident;
+
+    // 識別子が属するスコープ。
+    int scope_i;
+
+    // スコープ内の何番目の識別子か。
+    int index;
+
+    int tok_i;
+} Local;
+
+typedef struct VecLocal {
+    Local *data;
+    int len;
+    int capacity;
+} VecLocal;
+
+// -----------------------------------------------
+// 関数リスト
+// -----------------------------------------------
+
+typedef struct Fun {
+    FunKind kind;
+
+    const char *name;
+
+    // 関数の本体に対応するスコープ番号 (クロージャのみ)
+    int scope_i;
+
+    // 関数の本体を指すラベル番号 (クロージャのみ)
+    int label_i;
+} Fun;
+
+typedef struct VecFun {
+    Fun *data;
+    int len;
+    int capacity;
+} VecFun;
+
+// -----------------------------------------------
+// 外部関数リスト
+// -----------------------------------------------
+
+typedef void (*extern_fun_t)(Ctx *ctx, int argc);
+
+typedef struct ExternFun {
+    const char *name;
+    extern_fun_t fun;
+} ExternFun;
+
+typedef struct VecExternFun {
+    ExternFun *data;
+    int len;
+    int capacity;
+} VecExternFun;
+
+// -----------------------------------------------
+// 外部関数フレーム
+// -----------------------------------------------
+
+typedef struct ExternFunFrame {
+    bool err;
+    const char *err_message;
+
+    int arg_array_i;
+    int result_cell_i;
+}ExternFunFrame;
+
+// -----------------------------------------------
+// ループスタック
+// -----------------------------------------------
+
+typedef struct Loop {
+    int break_label_i;
+    int tok_i;
+} Loop;
+
+typedef struct VecLoop {
+    Loop *data;
+    int len;
+    int capacity;
+} VecLoop;
+
+// -----------------------------------------------
+// 命令リスト
+// -----------------------------------------------
+
+typedef struct Cmd {
+    CmdKind kind;
+    int x;
+    const char *str;
+    int scope_i;
+    int tok_i;
+} Cmd;
+
+typedef struct VecCmd {
+    Cmd *data;
+    int len;
+    int capacity;
+} VecCmd;
+
+// ###############################################
 // コンテクスト
 // ###############################################
 
@@ -426,16 +571,36 @@ struct NegiLangContext {
     int src_len;
 
     Errs errs;
+
     Toks toks;
+    int tok_i_root;
+    int tok_i_eof;
+
     SubExps subexps;
     Exps exps;
-
     int exp_i_root;
+
+    VecLabel labels;
+    VecScope scopes;
+    int scope_i_global;
+    int scope_i_current;
+    VecLocal locals;
+    VecFun funs;
+    int fun_i_main;
+    VecExternFun extern_funs;
+    VecLoop loops;
+    VecCmd cmds;
+    int cmd_i_entry;
+    int cmd_i_exit;
+
+    bool extern_calling;
+    ExternFunFrame extern_fun_frame;
 };
 
 extern void negi_lang_test_util();
 extern const char *negi_lang_tokenize_dump(const char *src);
 extern const char *negi_lang_parse_dump(const char *src);
+extern const char *negi_lang_gen_dump(const char *src);
 
 // ###############################################
 // デバッグ用

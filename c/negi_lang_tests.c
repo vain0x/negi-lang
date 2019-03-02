@@ -37,6 +37,13 @@ int main() {
         assert(strcmp(str, "(if p1 (; q1 0) (if p2 (; q2 0) (; (if p3 (; 0 0) 0) 0)))") == 0);
     }
 
+    {
+        const char *str = negi_lang_gen_dump(
+            "let a = 1; a += 1; if (a % 2 == 0) { a /= 2 } else { a *= 3 } a"
+        );
+        fprintf(stderr, "%s\n", str);
+    }
+
     fprintf(stderr, "SUCCESS!\n");
     return 0;
 }
