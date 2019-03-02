@@ -1,6 +1,7 @@
 #include "negi_lang.h"
 #include "negi_lang_internals.h"
 #include <assert.h>
+#include <inttypes.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -136,6 +137,32 @@ static void *sb_new() {
 }
 
 static const char *sb_to_str(const StringBuilder *sb) { return sb->data; }
+
+// ###############################################
+// 汎用: 整数のベクタ
+// ###############################################
+
+typedef struct VecInt {
+    int *data;
+    int len;
+    int capacity;
+} VecInt;
+
+static VecInt *vec_int_new() {
+    VecInt *vec = mem_alloc(1, sizeof(VecInt));
+    *vec = (VecInt){};
+    return vec;
+}
+
+static void vec_int_push(VecInt *vec, int value) {
+    if (vec->len == vec->capacity) {
+        mem_reserve((void **)&vec->data, vec->len, sizeof(int), &vec->capacity,
+                    1 + vec->capacity * 2);
+    }
+    assert(vec->len + 1 <= vec->capacity);
+
+    vec->data[vec->len++] = value;
+}
 
 // ###############################################
 // ソースコード
@@ -279,9 +306,18 @@ static struct Tok *tok_get(Ctx *ctx, int tok_i) {
     return &ctx->toks.data[tok_i];
 }
 
+static TokKind tok_kind(Ctx *ctx, int tok_i) {
+    return tok_get(ctx, tok_i)->kind;
+}
+
 static const char *tok_text(Ctx *ctx, int tok_i) {
     struct Tok *tok = tok_get(ctx, tok_i);
     return src_slice(ctx, tok->src_l, tok->src_r);
+}
+
+static bool tok_text_equals(Ctx *ctx, int tok_i, const char *expected) {
+    // HELP: We could optimize this.
+    return strcmp(tok_text(ctx, tok_i), expected) == 0;
 }
 
 struct TextTokKind {
@@ -343,14 +379,11 @@ static void tokenize(Ctx *ctx) {
             while (r < ctx->src_len) {
                 char c = ctx->src[r];
 
-                if (c == '\r' || c == '\n') {
-                    break;
-                }
-
-                if (c == '"') {
+                if (c == '"' || c == '\r' || c == '\n') {
                     r++;
                     break;
                 }
+
                 r++;
             }
 
@@ -422,6 +455,8 @@ static void tokenize(Ctx *ctx) {
 // ###############################################
 
 // トークンのリストに再帰下降構文解析を適用して、抽象構文木を作る。
+
+static int bump(int *p) { return (*p)++; }
 
 // -----------------------------------------------
 // トークンの種類
@@ -532,6 +567,10 @@ static int exp_add_subexps(Ctx *ctx, ExpKind kind, int exp_l, int *exp_is,
     return exp_i;
 }
 
+static int exp_add_null(Ctx *ctx, int tok_i) {
+    return exp_add_int(ctx, exp_int, 0, tok_i);
+}
+
 static int exp_add_let(Ctx *ctx, int ident_tok_i, int init_exp_i, int tok_i) {
     int exp_i = exp_add(ctx, exp_let, tok_i);
     exp_get(ctx, exp_i)->int_value = ident_tok_i;
@@ -556,23 +595,464 @@ static int exp_add_while(Ctx *ctx, int cond_exp_i, int body_exp_i, int tok_i) {
     exp->exp_l = body_exp_i;
     return exp_i;
 }
+static int exp_add_return(Ctx *ctx, int exp_l, int tok_i) {
+    int exp_i = exp_add(ctx, exp_return, tok_i);
+    Exp *exp = exp_get(ctx, exp_i);
+    exp->exp_l = exp_l;
+    return exp_i;
+}
+
+// -----------------------------------------------
+// 演算子
+// -----------------------------------------------
+
+typedef struct OpLevelOpKindOpTextTuple {
+    OpLevel level;
+    OpKind kind;
+    const char *text;
+} OpLevelOpKindOpTextTuple;
+
+static const OpLevelOpKindOpTextTuple op_table[] = {
+    {op_level_set, op_set, "="},      {op_level_set, op_set_add, "+="},
+    {op_level_set, op_set_sub, "-="}, {op_level_set, op_set_mul, "*="},
+    {op_level_set, op_set_div, "/="}, {op_level_set, op_set_mod, "%="},
+    {op_level_cmp, op_eq, "=="},      {op_level_cmp, op_ne, "!="},
+    {op_level_cmp, op_lt, "<"},       {op_level_cmp, op_le, "<="},
+    {op_level_cmp, op_gt, ">"},       {op_level_cmp, op_ge, ">="},
+    {op_level_add, op_add, "+"},      {op_level_add, op_sub, "-"},
+    {op_level_mul, op_mul, "*"},      {op_level_mul, op_div, "/"},
+    {op_level_mul, op_mod, "%"},
+};
 
 // -----------------------------------------------
 // 構文解析
 // -----------------------------------------------
 
+static int parse_bin_l(Ctx *ctx, int *tok_i, OpLevel op_level);
+
 static int parse_term(Ctx *ctx, int *tok_i);
 
 static int parse_exp(Ctx *ctx, int *tok_i);
 
+static int parse_str(Ctx *ctx, int *tok_i) {
+    assert(tok_kind(ctx, *tok_i) == tok_str);
+
+    Tok *tok = tok_get(ctx, *tok_i);
+    assert(tok->src_r - tok->src_l >= 2);
+
+    const char *text = src_slice(ctx, tok->src_l + 1, tok->src_r - 1);
+    return exp_add_str(ctx, tok_str, text, bump(tok_i));
+}
+
+static VecInt *parse_list(Ctx *ctx, int *tok_i, int bracket_tok_i) {
+    VecInt *exp_is = vec_int_new();
+
+    while (true) {
+        if (!tok_leads_term(tok_kind(ctx, *tok_i))) {
+            break;
+        }
+
+        int exp_i = parse_term(ctx, tok_i);
+        vec_int_push(exp_is, exp_i);
+
+        if (tok_kind(ctx, *tok_i) != tok_comma) {
+            break;
+        }
+        bump(tok_i);
+    }
+
+    return exp_is;
+}
+
+static int parse_array(Ctx *ctx, int *tok_i) {
+    assert(tok_kind(ctx, *tok_i) == tok_bracket_l);
+    int bracket_tok_i = bump(tok_i);
+
+    VecInt *exp_is = parse_list(ctx, tok_i, bracket_tok_i);
+    int exp_i = exp_add_subexps(ctx, exp_array, exp_i_none, exp_is->data,
+                                exp_is->len, bracket_tok_i);
+
+    if (tok_kind(ctx, *tok_i) != tok_bracket_r) {
+        return exp_add_err(ctx, "角カッコが閉じられていません。",
+                           bracket_tok_i);
+    }
+    bump(tok_i);
+
+    return exp_i;
+}
+
+static int parse_block(Ctx *ctx, int *tok_i) {
+    assert(tok_kind(ctx, *tok_i) == tok_brace_l);
+    int brace_tok_i = bump(tok_i);
+
+    int exp_i = parse_exp(ctx, tok_i);
+
+    if (tok_kind(ctx, *tok_i) != tok_brace_r) {
+        return exp_add_err(ctx, "波カッコが閉じられていません。", brace_tok_i);
+    }
+    bump(tok_i);
+
+    return exp_i;
+}
+
+static int parse_fun(Ctx *ctx, int *tok_i) {
+    assert(tok_kind(ctx, *tok_i) == tok_fun);
+    int fun_tok_i = bump(tok_i);
+
+    if (tok_kind(ctx, *tok_i) != tok_paren_l) {
+        return exp_add_err(ctx, "仮引数リストが必要です。", *tok_i);
+    }
+    int paren_tok_i = bump(tok_i);
+
+    VecInt *exp_is = parse_list(ctx, tok_i, paren_tok_i);
+
+    if (tok_kind(ctx, *tok_i) != tok_paren_r) {
+        return exp_add_err(ctx, "丸カッコが閉じられていません。", paren_tok_i);
+    }
+    bump(tok_i);
+
+    int body_exp_i = tok_kind(ctx, *tok_i) == tok_brace_l
+                         ? parse_block(ctx, tok_i)
+                         : parse_term(ctx, tok_i);
+
+    int fun_exp_i = exp_add_subexps(ctx, exp_fun, body_exp_i, exp_is->data,
+                                    exp_is->len, fun_tok_i);
+    return fun_exp_i;
+}
+
 static int parse_atom(Ctx *ctx, int *tok_i) {
-    switch (tok_get(ctx, *tok_i)->kind) {
+    switch (tok_kind(ctx, *tok_i)) {
     case tok_int: {
         int value = atol(tok_text(ctx, *tok_i));
-        return exp_add_int(ctx, exp_int, value, *tok_i++);
+        return exp_add_int(ctx, exp_int, value, bump(tok_i));
     }
-    default: { failwith("Unknown token kind as atom"); }
+    case tok_str:
+        return parse_str(ctx, tok_i);
+    case tok_ident: {
+        const char *text = tok_text(ctx, *tok_i);
+        return exp_add_str(ctx, exp_ident, text, bump(tok_i));
     }
+    case tok_paren_l: {
+        int paren_tok_i = bump(tok_i);
+        int exp_i = parse_term(ctx, tok_i);
+        if (tok_kind(ctx, *tok_i) != tok_paren_r) {
+            return exp_add_err(ctx, "丸カッコが閉じられていません。",
+                               paren_tok_i);
+        }
+        bump(tok_i);
+        return exp_i;
+    }
+    case tok_bracket_l:
+        return parse_array(ctx, tok_i);
+    default: {
+        assert(!tok_leads_term(tok_kind(ctx, *tok_i)));
+        failwith("Unknown token kind as atom");
+    }
+    }
+}
+
+static int parse_suffix(Ctx *ctx, int *tok_i) {
+    int exp_l = parse_atom(ctx, tok_i);
+
+    while (true) {
+        TokKind kind = tok_kind(ctx, *tok_i);
+
+        if (kind == tok_paren_l) {
+            int paren_tok_i = bump(tok_i);
+
+            VecInt *arg_exp_is = parse_list(ctx, tok_i, paren_tok_i);
+
+            if (tok_kind(ctx, *tok_i) != tok_paren_r) {
+                return exp_add_err(ctx, "丸カッコが閉じられていません。",
+                                   paren_tok_i);
+            }
+            bump(tok_i);
+
+            exp_l = exp_add_subexps(ctx, exp_call, exp_l, arg_exp_is->data,
+                                    arg_exp_is->len, paren_tok_i);
+            continue;
+        }
+
+        if (kind == tok_bracket_l) {
+            int bracket_tok_i = bump(tok_i);
+
+            int exp_r = parse_term(ctx, tok_i);
+
+            if (tok_kind(ctx, *tok_i) != tok_bracket_r) {
+                exp_r = exp_add_err(ctx, "角カッコが閉じられていません。",
+                                    bracket_tok_i);
+            }
+            bump(tok_i);
+
+            exp_l = exp_add_bin(ctx, op_index, exp_l, exp_r, bracket_tok_i);
+            continue;
+        }
+
+        break;
+    }
+
+    return exp_l;
+}
+
+static int parse_prefix(Ctx *ctx, int *tok_i) {
+    if (tok_kind(ctx, *tok_i) == tok_op) {
+        int op_tok_i = *tok_i;
+
+        if (tok_text_equals(ctx, *tok_i, "-")) {
+            bump(tok_i);
+            int exp_l = exp_add_int(ctx, exp_int, 0, op_tok_i);
+            int exp_r = parse_suffix(ctx, tok_i);
+            return exp_add_bin(ctx, op_sub, exp_l, exp_r, op_tok_i);
+        }
+
+        return exp_add_err(ctx, "この演算子は前置演算子ではありません。",
+                           op_tok_i);
+    }
+
+    return parse_suffix(ctx, tok_i);
+}
+
+static OpKind parse_op(Ctx *ctx, int *tok_i, OpLevel op_level) {
+    if (tok_kind(ctx, *tok_i) != tok_op) {
+        return op_err;
+    }
+
+    for (int i = 0; i < array_len(op_table); i++) {
+        if (op_table[i].level != op_level) {
+            continue;
+        }
+        if (!tok_text_equals(ctx, *tok_i, op_table[i].text)) {
+            continue;
+        }
+        return op_table[i].kind;
+    }
+    return op_err;
+}
+
+static int parse_bin_next(Ctx *ctx, int *tok_i, OpLevel op_level) {
+    if (op_level == op_level_mul) {
+        return parse_prefix(ctx, tok_i);
+    }
+    return parse_bin_l(ctx, tok_i, op_level + 1);
+}
+
+static int parse_bin_l(Ctx *ctx, int *tok_i, OpLevel op_level) {
+    int exp_l = parse_bin_next(ctx, tok_i, op_level);
+
+    while (true) {
+        if (tok_kind(ctx, *tok_i) != tok_op) {
+            break;
+        }
+
+        OpKind op = parse_op(ctx, tok_i, op_level);
+        if (op == op_err) {
+            break;
+        }
+        int op_tok_i = bump(tok_i);
+
+        int exp_r = parse_bin_next(ctx, tok_i, op_level);
+
+        exp_l = exp_add_bin(ctx, op, exp_l, exp_r, op_tok_i);
+    }
+
+    return exp_l;
+}
+
+static int parse_bin_set(Ctx *ctx, int *tok_i) {
+    int exp_l = parse_bin_l(ctx, tok_i, op_level_cmp);
+
+    if (tok_kind(ctx, *tok_i) == tok_op) {
+        int op_tok_i = *tok_i;
+        OpKind op = parse_op(ctx, tok_i, op_level_set);
+        if (op != op_err) {
+            bump(tok_i);
+
+            int exp_r = parse_term(ctx, tok_i);
+            exp_l = exp_add_bin(ctx, op, exp_l, exp_r, op_tok_i);
+        }
+    }
+
+    return exp_l;
+}
+
+static int parse_cond(Ctx *ctx, int *tok_i) {
+    int cond_exp_i = parse_bin_set(ctx, tok_i);
+
+    if (!(tok_kind(ctx, *tok_i) == tok_op &&
+          tok_text_equals(ctx, *tok_i, "?"))) {
+        return cond_exp_i;
+    }
+    int question_tok_i = bump(tok_i);
+
+    int then_exp_i = parse_term(ctx, tok_i);
+
+    if (!(tok_kind(ctx, *tok_i) == tok_op &&
+          tok_text_equals(ctx, *tok_i, ":"))) {
+        return exp_add_err(ctx, "対応するコロンがありません。", question_tok_i);
+    }
+    bump(tok_i);
+
+    int else_exp_i = parse_term(ctx, tok_i);
+
+    return exp_add_if(ctx, cond_exp_i, then_exp_i, else_exp_i, question_tok_i);
+}
+
+int parse_term(Ctx *ctx, int *tok_i) {
+    assert(tok_leads_term(tok_kind(ctx, *tok_i)));
+
+    TokKind kind = tok_kind(ctx, *tok_i);
+    if (kind == tok_fun) {
+        return parse_fun(ctx, tok_i);
+    }
+    return parse_cond(ctx, tok_i);
+}
+
+static int parse_let(Ctx *ctx, int *tok_i) {
+    assert(tok_kind(ctx, *tok_i) == tok_let);
+
+    int let_tok_i = bump(tok_i);
+
+    if (tok_kind(ctx, *tok_i) != tok_ident) {
+        return exp_add_err(ctx, "変数名が必要です。", *tok_i);
+    }
+    int ident_tok_i = bump(tok_i);
+
+    if (!(tok_kind(ctx, *tok_i) == tok_op &&
+          tok_text_equals(ctx, *tok_i, "="))) {
+        return exp_add_err(ctx, "'=' が必要です。", *tok_i);
+    }
+    bump(tok_i);
+
+    int init_exp_i = parse_term(ctx, tok_i);
+
+    return exp_add_let(ctx, ident_tok_i, init_exp_i, let_tok_i);
+}
+
+static int parse_if(Ctx *ctx, int *tok_i) {
+    assert(tok_kind(ctx, *tok_i) == tok_if);
+
+    int if_tok_i = bump(tok_i);
+
+    if (tok_kind(ctx, *tok_i) != tok_paren_l) {
+        return exp_add_err(ctx, "丸カッコが必要です。", *tok_i);
+    }
+    int cond_exp_i = parse_term(ctx, tok_i);
+
+    if (tok_kind(ctx, *tok_i) != tok_brace_l) {
+        return exp_add_err(ctx, "波カッコが必要です。", *tok_i);
+    }
+    int then_exp_i = parse_block(ctx, tok_i);
+
+    int else_exp_i;
+    if (tok_kind(ctx, *tok_i) == tok_else) {
+        bump(tok_i);
+
+        if (tok_kind(ctx, *tok_i) == tok_if) {
+            else_exp_i = parse_if(ctx, tok_i);
+        } else if (tok_kind(ctx, *tok_i) == tok_brace_l) {
+            else_exp_i = parse_block(ctx, tok_i);
+        } else {
+            else_exp_i =
+                exp_add_err(ctx, "if または波カッコが必要です。", *tok_i);
+        }
+    } else {
+        // if (p) { x } ---> if (p) { x } else { null }
+        else_exp_i = exp_add_null(ctx, if_tok_i);
+    }
+
+    return exp_add_if(ctx, cond_exp_i, then_exp_i, else_exp_i, if_tok_i);
+}
+
+static int parse_while(Ctx *ctx, int *tok_i) {
+    assert(tok_kind(ctx, *tok_i) == tok_while);
+    int while_tok_i = bump(tok_i);
+
+    if (tok_kind(ctx, *tok_i) != tok_paren_l) {
+        return exp_add_err(ctx, "丸カッコが必要です。", *tok_i);
+    }
+    int cond_exp_i = parse_atom(ctx, tok_i);
+
+    if (tok_kind(ctx, *tok_i) != tok_brace_l) {
+        return exp_add_err(ctx, "波カッコが必要です。", *tok_i);
+    }
+    int body_exp_i = parse_block(ctx, tok_i);
+
+    return exp_add_while(ctx, cond_exp_i, body_exp_i, while_tok_i);
+}
+
+static int parse_break(Ctx *ctx, int *tok_i) {
+    assert(tok_kind(ctx, *tok_i) == tok_break);
+    int break_tok_i = bump(tok_i);
+
+    return exp_add(ctx, exp_break, break_tok_i);
+}
+
+static int parse_return(Ctx *ctx, int *tok_i) {
+    assert(tok_kind(ctx, *tok_i) == tok_return);
+    int return_tok_i = bump(tok_i);
+
+    int exp_l = tok_leads_term(tok_kind(ctx, *tok_i))
+                    ? parse_term(ctx, tok_i)
+                    : exp_add_null(ctx, return_tok_i);
+
+    return exp_add_return(ctx, exp_l, return_tok_i);
+}
+
+int parse_stmt(Ctx *ctx, int *tok_i) {
+    assert(tok_leads_stmt(tok_kind(ctx, *tok_i)));
+
+    switch (tok_kind(ctx, *tok_i)) {
+    case tok_let:
+        return parse_let(ctx, tok_i);
+    case tok_if:
+        return parse_if(ctx, tok_i);
+    case tok_while:
+        return parse_while(ctx, tok_i);
+    case tok_break:
+        return parse_break(ctx, tok_i);
+    case tok_return:
+        return parse_return(ctx, tok_i);
+    default:
+        return parse_term(ctx, tok_i);
+    }
+}
+
+static int parse_semi(Ctx *ctx, int *tok_i) {
+    while (tok_kind(ctx, *tok_i) == tok_semi) {
+        bump(tok_i);
+    }
+
+    if (!tok_leads_stmt(tok_kind(ctx, *tok_i))) {
+        return exp_add_null(ctx, *tok_i);
+    }
+
+    int exp_l = parse_stmt(ctx, tok_i);
+    while (true) {
+        int semi_tok_i = *tok_i;
+
+        while (tok_kind(ctx, *tok_i) == tok_semi) {
+            bump(tok_i);
+        }
+
+        if (!tok_leads_stmt(tok_kind(ctx, *tok_i))) {
+            break;
+        }
+
+        int exp_r = parse_stmt(ctx, tok_i);
+
+        exp_l = exp_add_bin(ctx, op_semi, exp_l, exp_r, semi_tok_i);
+    }
+    return exp_l;
+}
+
+static int parse_exp(Ctx *ctx, int *tok_i) {
+    int exp_l = parse_semi(ctx, tok_i);
+
+    // 結果を捨てる。
+    int exp_r = exp_add_null(ctx, *tok_i);
+    exp_l = exp_add_bin(ctx, op_semi, exp_l, exp_r, *tok_i);
+
+    return exp_l;
 }
 
 static void parse_eof(Ctx *ctx, int *tok_i) {
@@ -588,11 +1068,11 @@ static void parse_eof(Ctx *ctx, int *tok_i) {
 }
 
 static void parse(Ctx *ctx) {
-    int exp_i_bad = exp_add_err(ctx, "NOT AN EXPRESSION", 0);
-    assert(exp_i_bad == 0);
+    int exp_i = exp_add_err(ctx, "NOT AN EXPRESSION", 0);
+    assert(exp_i == exp_i_none);
 
     int tok_i = 0;
-    ctx->exp_i_root = parse_atom(ctx, &tok_i);
+    ctx->exp_i_root = parse_semi(ctx, &tok_i);
     parse_eof(ctx, &tok_i);
 }
 
@@ -627,11 +1107,63 @@ const char *negi_lang_tokenize_dump(const char *src) {
 static void dump_exp(Ctx *ctx, int exp_i, StringBuilder *out) {
     Exp *exp = exp_get(ctx, exp_i);
     switch (exp->kind) {
+    case exp_err: {
+        sb_append(out, str_format("err '%s' \"%s\"", tok_text(ctx, exp->tok_i),
+                                  exp->str_value));
+        break;
+    }
     case exp_int: {
         sb_append(out, str_format("%d", exp->int_value));
         break;
     }
-    default: { failwith("Unknown exp kind"); }
+    case exp_str: {
+        sb_append(out, str_format("\"%s\"", exp->str_value));
+        break;
+    }
+    case exp_ident: {
+        sb_append(out, exp->str_value);
+        break;
+    }
+    default: {
+        sb_append(out, "(");
+
+        {
+            const char *text = tok_text(ctx, exp->tok_i);
+            if (strcmp(text, "(") == 0) {
+                text = "paren";
+            } else if (strcmp(text, "[") == 0) {
+                text = "bracket";
+            } else if (strcmp(text, "{") == 0) {
+                text = "brace";
+            } else if (strcmp(text, "}") == 0) {
+                text = ";";
+            }
+            sb_append(out, text);
+        }
+
+        if (exp->str_value != NULL) {
+            sb_append(out, str_format(" \"%s\"", exp->str_value));
+        }
+        if (exp->exp_cond != exp_i_none) {
+            sb_append(out, " ");
+            dump_exp(ctx, exp->exp_cond, out);
+        }
+        if (exp->exp_l != exp_i_none) {
+            sb_append(out, " ");
+            dump_exp(ctx, exp->exp_l, out);
+        }
+        if (exp->exp_r != exp_i_none) {
+            sb_append(out, " ");
+            dump_exp(ctx, exp->exp_r, out);
+        }
+        for (int i = exp->subexp_l; i < exp->subexp_r; i++) {
+            sb_append(out, " ");
+            dump_exp(ctx, ctx->subexps.data[i].exp_i, out);
+        }
+
+        sb_append(out, ")");
+        break;
+    }
     }
 }
 
