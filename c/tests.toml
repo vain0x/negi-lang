@@ -1,0 +1,486 @@
+[[eval]]
+name = "空のプログラムは何もせず正常終了する"
+src = ""
+
+[[eval]]
+name = "終了コードをゼロにできる"
+src = "0"
+exit = 0
+
+[[eval]]
+name = "終了コードを非ゼロにできる"
+src = "42"
+exit = 42
+
+[[eval]]
+name = "セミコロンが使える"
+src = ";;; 1 ; 2 ;;; 3"
+exit = 3
+[[eval]]
+name = "末尾のセミコロンは無視される"
+src = "1 ;;;"
+exit = 1
+
+[[eval]]
+name = "加算ができる"
+src = "2 + 3"
+exit = 5
+
+[[eval]]
+name = "加算と減算ができる"
+src = "7 - 2 + 3"
+exit = 8
+
+[[eval]]
+name = "加算や乗算などができる"
+src = "21 / 5 * 2 + 7 % 3"
+exit = 9
+
+[[eval]]
+name = "マイナスが使える"
+src = "-(21 * -1 * 2)"
+exit = 42
+
+[[eval]]
+name = "比較 == true"
+src = "1 == 1"
+exit = 1
+
+[[eval]]
+name = "比較 == false"
+src = "1 == 2"
+exit = 0
+
+[[eval]]
+name = "比較 < true"
+src = "1 < 2"
+exit = 1
+
+[[eval]]
+name = "比較 < false"
+src = "1 < 1"
+exit = 0
+
+[[eval]]
+name = "比較 <= true"
+src = "1 <= 1"
+exit = 1
+
+[[eval]]
+name = "比較 <= false"
+src = "3 <= 2"
+exit = 0
+
+[[eval]]
+name = "異なる型を等号で比較できる"
+src = """
+    1 == "1"
+"""
+
+[[eval]]
+name = "異なる型の大小を比較できる"
+src = """
+    9 < "1"
+"""
+exit = 1
+
+[[eval]]
+name = "比較 文字列の等号否定 true"
+src = """
+    "b" != "a"
+"""
+exit = 1
+
+[[eval]]
+name = "文字列の加算と比較"
+src = """
+    "hello, " + "world" == "hello, world"
+"""
+exit =  1
+
+[[eval]]
+name = "文字列から文字をとる"
+src = """
+    "ab"[0] + "ab"[1]
+"""
+exit = 195
+
+[[eval]]
+name = "配列の要素を取得できる"
+src = """
+    [42][0]
+"""
+exit = 42
+
+[[eval]]
+name = "任意の長さの配列リテラルを書ける"
+src = """
+    [3, 1, 4, 1, 5, 9][4]
+"""
+exit = 5
+
+[[eval]]
+name = "カッコを含む式"
+src = """
+    3 * (1 + (4 - 1))
+"""
+exit = 12
+
+[[eval]]
+name = "構文エラー"
+src = "1 + * 2"
+err = """
+    1:5..1:6 near '*'
+        この演算子は前置演算子ではありません。
+"""
+exit = 1
+
+[[eval]]
+name = "パーサーが末尾に到達しなければエラー"
+src = "}"
+err = """
+    1:1..1:2 near '}'
+        この字句を解釈できませんでした。
+"""
+exit = 0
+
+[[eval]]
+name = "丸カッコの不対応の構文エラー"
+src = "(0) + (0 + (0)"
+err = """
+    1:7..1:8 near '('
+        丸カッコが閉じられていません。
+"""
+exit = 1
+
+[[eval]]
+name = "角カッコの不対応の構文エラー"
+src = "a[a][a[a]"
+err = """
+    1:5..1:6 near '['
+        角カッコが閉じられていません。
+"""
+exit = 1
+
+[[eval]]
+name = "計算時に型が混在しているとエラー"
+src = """
+    0 + "1"
+"""
+err = """
+    1:7..1:8 near '+'
+        型エラー
+"""
+exit = 1
+
+[[eval]]
+name = "終了コードが整数でなければエラー"
+src = """
+    "a"
+"""
+err = """
+    2:1..2:1 near ''
+        終了コードは整数値でなければいけません。
+"""
+exit = 1
+
+[[eval]]
+name = "変数を使える"
+src = """
+    let a = 21;
+    let b = 2;
+    a * b
+"""
+exit = 42
+
+[[eval]]
+name = "変数に配列を入れられる"
+src = """
+    let a = [1];
+    let b = [a];
+    b[0][0]
+"""
+exit = 1
+
+[[eval]]
+name = "未定義の変数の参照はエラー"
+src = """
+    let a = a + 1
+"""
+err = """
+    1:13..1:14 near 'a'
+        未定義の変数を使用しています。
+"""
+exit = 1
+
+[[eval]]
+name = "代入できる"
+src = """
+    let a = 21;
+    a = a * 2;
+    a
+"""
+exit = 42
+
+[[eval]]
+name = "未定義の変数への代入はエラー"
+src = """
+    a = 0
+"""
+err = """
+    1:5..1:6 near 'a'
+        未定義の変数を使用しています。
+"""
+exit = 1
+
+[[eval]]
+name = "代入の右辺に term を書ける"
+src = """
+    let a = 1;
+    a = 0 == 0 ? 2 : 0;
+    a
+"""
+exit = 2
+
+[[eval]]
+name = "複合代入ができる"
+src = """
+    let a = 0;
+    a += 250;
+    a -= 8;
+    a *= 2;
+    a /= 2;
+    a %= 100;
+    a
+"""
+exit = 42
+
+[[eval]]
+name = "条件式で then 節が計算される"
+src = """
+    0 == 0 ? 1 : 2
+"""
+exit = 1
+
+[[eval]]
+name = "条件式で else 節が計算される"
+src = """
+    0 != 0 ? 1 : 2
+"""
+exit = 2
+
+[[eval]]
+name = "条件式を連鎖できる"
+src = """
+    0 != 0 ? 1 : 0 == 0 ? 2 : 3
+"""
+exit = 2
+
+[[eval]]
+name = "if 文の中に文を書ける"
+src = """
+    let a = 1;
+    if (0 == 0) {
+        if (a == 1) { a = a + 1 }
+        a = a + 1;
+    }
+    a
+"""
+exit = 3
+
+[[eval]]
+name = "else が使える"
+src = """
+    let a = 1;
+    if (0 != 0) { a = 2 } else { a = 3 }
+    a
+"""
+exit = 3
+
+[[eval]]
+name = "else-if が使える"
+src = """
+    let x = 10;
+    let s = "";
+    if (x % 15 == 0) {
+        s = s + "Fizz Buzz"
+    } else if (x % 3 == 0) {
+        s = s + "Fizz"
+    } else if (x % 5 == 0) {
+        s = s + "Buzz"
+    } else {
+        s = s + "10"
+    }
+    s == "Buzz"
+"""
+exit = 1
+
+[[eval]]
+name = "while が使える"
+src = """
+    let i = 0;
+    while (i < 10) {
+        i = i + 1
+    }
+    i
+"""
+exit = 10
+
+[[eval]]
+name = "break が使える"
+src = """
+    let x = 25;
+    let p = 2;
+    while (p < x) {
+        if (x % p == 0) { break }
+        p = p + 1
+    }
+    p
+"""
+exit = 5
+
+[[eval]]
+name = "入れ子の while で break できる (2~10 の最小の素因数の総和をとる)"
+src = """
+    let s = 0;
+    let x = 2;
+    while (x < 10) {
+        let p = 2;
+        while (p < x) {
+            if (x % p == 0) { break }
+            p = p + 1
+        }
+        s = s + p;
+        x = x + 1;
+    }
+    s
+"""
+exit = 26
+
+[[eval]]
+name = "整数は関数として呼べない"
+src = "1()"
+err = """
+    1:2..1:3 near '('
+        型エラー
+"""
+exit = 1
+
+[[eval]]
+name = "組み込み関数を呼べる"
+src = "array_len([1, 2, 3])"
+exit = 3
+
+[[eval]]
+name = "ラムダ式を使える"
+src = """
+    let f = fun() { return 42 };
+    f()
+"""
+exit = 42
+
+[[eval]]
+name = "ラムダ式の本体を式にできる"
+src = """
+    let f = fun() 42;
+    f()
+"""
+exit = 42
+
+[[eval]]
+name = "ラムダ式が引数をとれる"
+src = """
+    let f = fun(x) x * 2;
+    f(21)
+"""
+exit = 42
+
+[[eval]]
+name = "ラムダ式が複数の引数をとれる"
+src = """
+    let div = fun(x, y) x / y;
+    div(420, 10)
+"""
+exit = 42
+
+[[eval]]
+name = "ローカル変数に代入できる"
+src = """
+    let f = fun(x, y) { x = x + 1; y = y + 2; return x * y };
+    f(1, 19)
+"""
+exit = 42
+
+[[eval]]
+name = "ラムダ式の中でグローバル変数にアクセスできる"
+src = """
+    let x = 2;
+    let f = fun(y) { x = x * y };
+    f(21);
+    x
+"""
+exit = 42
+
+[[eval]]
+name = "ラムダ式の中で外側のローカル変数にアクセスできる"
+src = """
+    let make_counter = fun(x) {
+        return fun(y) {
+            x = x + y;
+            return x;
+        };
+    };
+    let c = make_counter(0);
+    let s = 0;
+    s = s * 10 + c(1);
+    s = s * 10 + c(1);
+    let d = make_counter(0);
+    s = s * 10 + d(1);
+    s
+"""
+exit = 121
+
+[[eval]]
+name = "回帰テスト"
+src = """
+    let a = 0;
+    let f = fun() {
+        a += 1;
+        return a;
+    };
+    let g = fun() {
+        let b = f();
+        a += b;
+    };
+    g();
+    a
+"""
+exit = 2
+
+[[eval]]
+name = "配列が自動で拡張される"
+src = """
+    let a = [];
+    array_push(a, 1);
+    array_push(a, 2);
+    array_push(a, 3);
+    ((a[0] * 10 + a[1]) * 10 + a[2]) * 10 + array_len(a)
+"""
+exit = 1233
+
+[[eval]]
+name = "配列の要素に代入できる"
+src = """
+    let a = [1];
+    let b = a;
+    a[0] = 42;
+    b[0]
+"""
+exit = 42
+
+[[eval]]
+name = "ローカル変数に加算代入などができる"
+src = """
+    let a = 2; a += 1; a *= 14; a
+"""
+exit = 42
