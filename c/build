@@ -1,0 +1,3 @@
+#!/bin/bash
+
+gcc -g -std=c11 -Wall -D_DEBUG ./tomlc99/toml.c ./negi_lang.c ./negi_lang_tests.c
