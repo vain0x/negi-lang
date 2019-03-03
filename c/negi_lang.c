@@ -796,7 +796,7 @@ static int parse_suffix(Ctx *ctx, int *tok_i) {
 
             if (tok_kind(ctx, *tok_i) != tok_bracket_r) {
                 return exp_add_err(ctx, "角カッコが閉じられていません。",
-                                    bracket_tok_i);
+                                   bracket_tok_i);
             }
             bump(tok_i);
 
@@ -1737,6 +1737,11 @@ static void cell_initialize(Ctx *ctx) {
     ctx->gc_threshold = heap_len_min / 2;
 }
 
+static Cell *cell_get(Ctx *ctx, int cell_i) {
+    assert(0 <= cell_i && cell_i < ctx->cells.len);
+    return &ctx->cells.data[cell_i];
+}
+
 // -----------------------------------------------
 // 参照セルリスト: スタック領域
 // -----------------------------------------------
@@ -2191,13 +2196,34 @@ static void eval_op(Ctx *ctx, int cmd_i) {
     }
 
     if (op == op_index) {
-        unimplemented();
+        if (ty == ty_str && r_cell.ty == ty_int) {
+            int i = r_cell.val;
+            const Str *str = str_get(ctx, val);
+            char c = 0 <= i && i < str->len ? str->data[i] : '\0';
+            stack_push(ctx, (Cell){.ty = ty_int, .val = (int)c});
+            return;
+        }
+        if (ty == ty_array && r_cell.ty == ty_int) {
+            Cell item = array_get_item(ctx, val, r_cell.val);
+            stack_push(ctx, item);
+            return;
+        }
+        eval_abort(ctx, "型エラー", cmd->tok_i);
+        return;
     }
     if (op == op_index_ref) {
-        unimplemented();
+        if (ty == ty_array && r_cell.ty == ty_int) {
+            int cell_i = array_ref(ctx, val, r_cell.val);
+            stack_push(ctx, (Cell){.ty = ty_cell, .val = cell_i});
+            return;
+        }
+        eval_abort(ctx, "型エラー", cmd->tok_i);
     }
     if (op == op_array_push) {
-        unimplemented();
+        assert(ty == ty_array);
+        array_push(ctx, val, r_cell);
+        stack_push(ctx, l_cell);
+        return;
     }
 
     if (ty != r_cell.ty) {
