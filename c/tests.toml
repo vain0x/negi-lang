@@ -2,6 +2,196 @@
 name = "終了コードを 0 にできる。"
 src = "0"
 
+
+[[eval]]
+name = "空のプログラムは何もせず正常終了する"
+src = ""
+
+[[eval]]
+name = "終了コードをゼロにできる"
+src = "0"
+exit = 0
+
+[[eval]]
+name = "終了コードを非ゼロにできる"
+src = "42"
+exit = 42
+
+[[eval]]
+name = "セミコロンが使える"
+src = ";;; 1 ; 2 ;;; 3"
+exit = 3
+[[eval]]
+name = "末尾のセミコロンは無視される"
+src = "1 ;;;"
+exit = 1
+
+[[eval]]
+name = "加算ができる"
+src = "2 + 3"
+exit = 5
+
+[[eval]]
+name = "加算と減算ができる"
+src = "7 - 2 + 3"
+exit = 8
+
+[[eval]]
+name = "加算や乗算などができる"
+src = "21 / 5 * 2 + 7 % 3"
+exit = 9
+
+[[eval]]
+name = "マイナスが使える"
+src = "-(21 * -1 * 2)"
+exit = 42
+
+[[eval]]
+name = "比較 == true"
+src = "1 == 1"
+exit = 1
+
+[[eval]]
+name = "比較 == false"
+src = "1 == 2"
+exit = 0
+
+[[eval]]
+name = "比較 < true"
+src = "1 < 2"
+exit = 1
+
+[[eval]]
+name = "比較 < false"
+src = "1 < 1"
+exit = 0
+
+[[eval]]
+name = "比較 <= true"
+src = "1 <= 1"
+exit = 1
+
+[[eval]]
+name = "比較 <= false"
+src = "3 <= 2"
+exit = 0
+
+[[eval]]
+name = "異なる型を等号で比較できる"
+src = """
+    1 == "1"
+"""
+
+[[eval]]
+name = "異なる型の大小を比較できる"
+src = """
+    9 < "1"
+"""
+exit = 1
+
+[[eval]]
+name = "比較 文字列の等号否定 true"
+src = """
+    "b" != "a"
+"""
+exit = 1
+
+[[eval]]
+name = "文字列の加算と比較"
+src = """
+    "hello, " + "world" == "hello, world"
+"""
+exit =  1
+
+[[eval]]
+name = "文字列から文字をとる"
+src = """
+    "ab"[0] + "ab"[1]
+"""
+exit = -1
+skip = true
+
+[[eval]]
+name = "配列の要素を取得できる"
+src = """
+    [42][0]
+"""
+exit = 42
+skip = true
+
+[[eval]]
+name = "任意の長さの配列リテラルを書ける"
+src = """
+    [3, 1, 4, 1, 5, 9][4]
+"""
+exit = 5
+skip = true
+
+[[eval]]
+name = "カッコを含む式"
+src = """
+    3 * (1 + (4 - 1))
+"""
+exit = 12
+
+[[eval]]
+name = "構文エラー"
+src = "1 + * 2"
+err = """
+    1:5..1:6 near '*'
+        この演算子は前置演算子ではありません。
+"""
+exit = 1
+
+[[eval]]
+name = "パーサーが末尾に到達しなければエラー"
+src = "}"
+err = """
+    1:1..1:2 near '}'
+        この字句を解釈できませんでした。
+"""
+exit = 0
+
+[[eval]]
+name = "丸カッコの不対応の構文エラー"
+src = "(0) + (0 + (0)"
+err = """
+    1:7..1:8 near '('
+        丸カッコが閉じられていません。
+"""
+exit = 1
+
+[[eval]]
+name = "角カッコの不対応の構文エラー"
+src = "a[a][a[a]"
+err = """
+    1:5..1:6 near '['
+        角カッコが閉じられていません。
+"""
+exit = 1
+
+[[eval]]
+name = "計算時に型が混在しているとエラー"
+src = """
+    0 + "1"
+"""
+err = """
+    1:7..1:8 near '+'
+        型エラー
+"""
+exit = 1
+
+[[eval]]
+name = "終了コードが整数でなければエラー"
+src = """
+    "a"
+"""
+err = """
+    2:1..2:1 near ''
+        終了コードは整数値でなければいけません。
+"""
+exit = 1
+
 [[eval]]
 name = "ローカル変数に加算代入などができる"
 src = """

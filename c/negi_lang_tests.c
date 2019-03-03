@@ -12,6 +12,8 @@ typedef struct EvalTestCase {
     const char *src;
     const char *err;
     int exit;
+    bool skip;
+    bool only;
 } EvalTestCase;
 
 static EvalTestCase eval_tests[1024];
@@ -99,11 +101,23 @@ static void parse_tests() {
             exit = strlen(err) == 0 ? 0 : 1;
         }
 
+        int skip;
+        if (toml_rtob(toml_raw_in(eval, "skip"), &skip) != toml_success) {
+            skip = 0;
+        }
+
+        int only;
+        if (toml_rtob(toml_raw_in(eval, "only"), &only) != toml_success) {
+            only = 0;
+        }
+
         eval_tests[eval_test_len++] = (EvalTestCase){
             .src = src,
             .name = name,
             .err = err,
             .exit = (int)exit,
+            .skip = skip != 0,
+            .only = only != 0,
         };
     }
 };
@@ -111,9 +125,8 @@ static void parse_tests() {
 void some_tests() { negi_lang_test_util(); }
 
 void eval_test_print_heading(int i, bool ok) {
-    if (!ok) {
+    if (!ok)
         return;
-    }
 
     fprintf(stderr, "[[eval]] %s\nsrc = %s\n", eval_tests[i].name,
             eval_tests[i].src);
@@ -130,11 +143,26 @@ int main() {
 
     int pass_count = 0;
     int fail_count = 0;
+    int skip_count = 0;
 
     parse_tests();
 
+    bool only;
+    for (int i = 0; i < eval_test_len; i++) {
+        if (eval_tests[i].only) {
+            only = true;
+        }
+    }
+
     for (int i = 0; i < eval_test_len; i++) {
         EvalTestCase *eval = &eval_tests[i];
+
+        if (eval->skip || (only && !eval->only)) {
+            skip_count++;
+            continue;
+        }
+
+        // eval_test_print_heading(i, true);
 
         bool ok = true;
         int exit;
@@ -166,11 +194,11 @@ int main() {
         }
     }
 
-    bool ok = pass_count > 0 && fail_count == 0;
+    bool ok = fail_count == 0;
     const char *status = ok ? "SUCCESS" : "FAILURE";
 
-    fprintf(stderr, "Result: %d pass / %d fail\nStatus: %s\n", pass_count,
-            fail_count, status);
+    fprintf(stderr, "Result: %d pass / %d fail / %d skip\nStatus: %s\n", pass_count,
+            fail_count, skip_count, status);
 
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }

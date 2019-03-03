@@ -254,8 +254,8 @@ static const char *err_summary(Ctx *ctx) {
 
         const char *text = src_slice(ctx, err->src_l, err->src_r);
 
-        sb_append(summary, str_format("%d:%d..%d%d", 1 + pos_l.y, 1 + pos_l.x,
-                                      1 + pos_r.y, 1 + pos_l.x));
+        sb_append(summary, str_format("%d:%d..%d:%d", 1 + pos_l.y, 1 + pos_l.x,
+                                      1 + pos_r.y, 1 + pos_r.x));
         sb_append(summary, " near '");
         sb_append(summary, text);
         sb_append(summary, "'\n  ");
@@ -657,7 +657,7 @@ static int parse_str(Ctx *ctx, int *tok_i) {
     assert(tok->src_r - tok->src_l >= 2);
 
     const char *text = src_slice(ctx, tok->src_l + 1, tok->src_r - 1);
-    return exp_add_str(ctx, tok_str, text, bump(tok_i));
+    return exp_add_str(ctx, exp_str, text, bump(tok_i));
 }
 
 static VecInt *parse_list(Ctx *ctx, int *tok_i, int bracket_tok_i) {
@@ -795,7 +795,7 @@ static int parse_suffix(Ctx *ctx, int *tok_i) {
             int exp_r = parse_term(ctx, tok_i);
 
             if (tok_kind(ctx, *tok_i) != tok_bracket_r) {
-                exp_r = exp_add_err(ctx, "角カッコが閉じられていません。",
+                return exp_add_err(ctx, "角カッコが閉じられていません。",
                                     bracket_tok_i);
             }
             bump(tok_i);
@@ -1072,12 +1072,8 @@ static int parse_exp(Ctx *ctx, int *tok_i) {
 static void parse_eof(Ctx *ctx, int *tok_i) {
     Tok *tok = tok_get(ctx, *tok_i);
     if (tok->kind != tok_eof) {
-        err_add(
-            ctx,
-            str_format(
-                "この字句を解釈できませんでした。 (tok_i %d, tok_kind = %d)",
-                *tok_i, tok->kind),
-            tok->src_l, tok->src_r);
+        err_add(ctx, str_format("この字句を解釈できませんでした。"), tok->src_l,
+                tok->src_r);
     }
 }
 
@@ -1230,6 +1226,7 @@ static bool local_find_var(Ctx *ctx, const char *ident, int tok_i,
             return true;
         }
 
+        assert(scope_i >= 0);
         Scope *scope = scope_get(ctx, scope_i);
         assert(scope_i != scope->parent);
         scope_i = scope->parent;
@@ -1826,7 +1823,7 @@ static int str_add(Ctx *ctx, const char *str) {
     vec_grow((void **)&ctx->strs.data, ctx->strs.len, &ctx->strs.capacity,
              sizeof(Str), 1);
 
-    int str_i = ctx->strs.len;
+    int str_i = ctx->strs.len++;
     int size = strlen(str);
     ctx->strs.data[str_i] = (Str){
         .data = str_slice(str, 0, size),
@@ -1944,6 +1941,7 @@ static int env_find(Ctx *ctx, int source_env_i, int index, int scope_i) {
     int env_i = source_env_i;
     while (env_get(ctx, env_i)->scope_i != scope_i) {
         assert(env_i != env_get(ctx, env_i)->parent);
+        assert(env_get(ctx, env_i)->parent >= 0);
         env_i = env_get(ctx, env_i)->parent;
     }
 
@@ -2489,7 +2487,7 @@ const char *negi_lang_gen_dump(const char *src) {
 }
 
 void negi_lang_eval_for_testing(const char *src, int *exit_code,
-                                       const char **output) {
+                                const char **output) {
     Ctx *ctx = ctx_new(src);
 
     tokenize(ctx);
