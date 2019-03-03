@@ -197,8 +197,8 @@ int main() {
     bool ok = fail_count == 0;
     const char *status = ok ? "SUCCESS" : "FAILURE";
 
-    fprintf(stderr, "Result: %d pass / %d fail / %d skip\nStatus: %s\n", pass_count,
-            fail_count, skip_count, status);
+    fprintf(stderr, "Result: %d pass / %d fail / %d skip\nStatus: %s\n",
+            pass_count, fail_count, skip_count, status);
 
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }

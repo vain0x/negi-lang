@@ -256,6 +256,66 @@ src = """
 exit = 42
 
 [[eval]]
+name = "条件式で then 節が計算される"
+src = """
+    0 == 0 ? 1 : 2
+"""
+exit = 1
+
+[[eval]]
+name = "条件式で else 節が計算される"
+src = """
+    0 != 0 ? 1 : 2
+"""
+exit = 2
+
+[[eval]]
+name = "条件式を連鎖できる"
+src = """
+    0 != 0 ? 1 : 0 == 0 ? 2 : 3
+"""
+exit = 2
+
+[[eval]]
+name = "if 文の中に文を書ける"
+src = """
+    let a = 1;
+    if (0 == 0) {
+        if (a == 1) { a = a + 1 }
+        a = a + 1;
+    }
+    a
+"""
+exit = 3
+
+[[eval]]
+name = "else が使える"
+src = """
+    let a = 1;
+    if (0 != 0) { a = 2 } else { a = 3 }
+    a
+"""
+exit = 3
+
+[[eval]]
+name = "else-if が使える"
+src = """
+    let x = 10;
+    let s = "";
+    if (x % 15 == 0) {
+        s = s + "Fizz Buzz"
+    } else if (x % 3 == 0) {
+        s = s + "Fizz"
+    } else if (x % 5 == 0) {
+        s = s + "Buzz"
+    } else {
+        s = s + "10"
+    }
+    s == "Buzz"
+"""
+exit = 1
+
+[[eval]]
 name = "ローカル変数に加算代入などができる"
 src = """
     let a = 2; a += 1; a *= 14; a
