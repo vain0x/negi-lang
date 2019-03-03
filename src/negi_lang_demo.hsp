@@ -29,7 +29,6 @@
 	x_define "hsp3_event_kind", *l_hsp3_event_kind
 	x_define "hsp3_event_obj_id", *l_hsp3_event_obj_id
 	x_define "hsp3_button", *l_hsp3_button
-	x_define "hsp3_mes", *l_hsp3_mes
 	return
 
 *l_hsp3_await
@@ -59,23 +58,6 @@
 
 	s_event_kind = "button"
 	s_event_obj_id = stat // オブジェクト ID
-	return
-
-*l_hsp3_mes
-
-	if x_argc != 1 {
-		x_result_err "mes error"
-		return
-	}
-	if x_arg_ty(0) == ty_int {
-		mes x_arg_int(0)
-	} else : if x_arg_ty(0) == ty_str {
-		mes x_arg_str(0)
-	} else {
-		logmes "unknown type " +(x_arg_ty(0) - ty_int)
-	}
-
-	x_result_int 0
 	return
 
 #deffunc app_eval str src, \

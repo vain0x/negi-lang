@@ -3120,6 +3120,7 @@
 	negi_lang_extern_fun_add "int_to_str", *l_int_to_str
 	negi_lang_extern_fun_add "array_len", *l_array_len
 	negi_lang_extern_fun_add "array_push", *l_array_push
+	negi_lang_extern_fun_add "hsp3_mes", *l_hsp3_mes
 	negi_lang_extern_fun_add "__dev_heap_make_tiny", *l_dev_heap_make_tiny
 	return
 
@@ -3149,6 +3150,23 @@
 	}
 	negi_lang_array_push x_arg_ty(0), x_arg_val(0), x_arg_ty(1), x_arg_val(1)
 	negi_lang_extern_result_any ty_array, x_arg_val(0)
+	return
+
+*l_hsp3_mes
+
+	if x_argc != 1 {
+		negi_lang_extern_result_err "mes error"
+		return
+	}
+	if x_arg_ty(0) == ty_int {
+		mes x_arg_val(0)
+	} else : if x_arg_ty(0) == ty_str {
+		mes s_strs(x_arg_val(0))
+	} else {
+		logmes "unknown type " + (x_arg_ty(0) - ty_int)
+	}
+
+	negi_lang_extern_result_int 0
 	return
 
 *l_dev_heap_make_tiny
