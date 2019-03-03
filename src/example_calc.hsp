@@ -1,0 +1,64 @@
+// ネギ言語 電卓
+
+#runtime "hsp3utf"
+
+#include "negi_lang.hsp"
+
+	sdim src, 4096
+	sdim output, 4096
+
+	src = {"let i = 0;\nwhile (i < 10) {\n\ti += 1;\n}\ni"}
+
+	margin_size = 8
+	calc_button_width = 80
+	calc_button_height = 28
+	editor_width = ginfo_winx - margin_size * 2
+	editor_height = ginfo_winy / 2
+	output_width = ginfo_winx - calc_button_width - margin_size * 3
+	output_height = ginfo_winy - editor_height - margin_size * 3
+	calc_button_top = ginfo_winy - calc_button_height - margin_size
+	calc_button_left = output_width + margin_size * 2
+
+	font "MS Gothic", 14
+
+	// 入力欄やボタンに font で指定したフォントを使う。
+	// タブキーによるフォーカス移動を無効化する。
+	objmode 2, 0
+
+	pos margin_size, margin_size
+	mesbox src, editor_width, editor_height
+	editor_obj_id = stat
+
+	pos calc_button_left, calc_button_top
+	objsize calc_button_width, calc_button_height
+	button gosub "計算", *l_calc
+	calc_button_obj_id = stat
+
+	onkey gosub *l_on_key
+	stop
+
+*l_on_key
+	// F5
+	if wparam == 116 {
+		gosub *l_calc
+		return
+	}
+	return
+
+*l_calc
+	pos margin_size, editor_height + margin_size * 2
+	redraw 2
+	color 255, 255, 255
+	boxf
+	color
+	redraw
+
+	exit_code = 0
+	negi_lang_eval_src src, exit_code
+	negi_lang_err_summary output
+
+	if output != "" {
+		mes output
+	}
+	mes "result = " + exit_code
+	return

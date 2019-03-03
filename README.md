@@ -11,6 +11,29 @@
 - クロージャ (ラムダ式)
 - 外部関数 (ネギ言語からHSPスクリプトの呼び出し)
 
+## サンプル
+
+```negi
+    let fizz_buzz = fun(n) {
+        if (n % 15 == 0) {
+            return "FizzBuzz"
+        } else if (n % 3 == 0) {
+            return "Fizz"
+        } else if (n % 5 == 0) {
+            return "Buzz"
+        } else {
+            return int_to_str(n)
+        }
+    };
+
+    let i = 1;
+    while (i <= 15) {
+        hsp3_mes(fizz_buzz(i));
+        i += 1;
+    }
+    0 // 終了コード
+```
+
 ## C言語版
 
 - `c` ディレクトリに、C言語に移植したバージョンがある。
