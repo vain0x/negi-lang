@@ -528,6 +528,18 @@
 			continue
 		}
 
+		// コメント行を無視する。
+		if c == '/' && peek(s_src, l + 1) == '/' {
+			r += 2
+			repeat
+				if r >= s_src_len { break }
+				c = peek(s_src, r)
+				if c == char_lf { break }
+				r++
+			loop
+			continue
+		}
+
 		if is_digit(c) {
 			r++
 			repeat

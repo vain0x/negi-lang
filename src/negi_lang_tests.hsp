@@ -365,6 +365,11 @@
 	eval_test "整数を文字列に変換できる", {"
 		int_to_str(0) == "0"
 	"}, "", 1
+	eval_test "コメントを書ける", {"
+		let a = 0;
+		// a += 1;
+		a
+	"}, "", 0
 
 	test_end
 	return
