@@ -21,6 +21,10 @@ do_failwith(const char *file_name, int line, const char *message) {
     abort();
 }
 
+static void do_trace(const char *file_name, int line, const char *message) {
+    fprintf(stderr, "[%s:%04d] %s\n", file_name, line, message);
+}
+
 // ###############################################
 // 汎用: メモリ
 // ###############################################
@@ -455,7 +459,7 @@ static void tokenize(Ctx *ctx) {
 
         // このとき、文字 c
         // はトークンとして不正なもの。エラーを表すトークンとして追加する。
-        d_trace(str_format("tok_err char = %c", c));
+        trace(str_format("tok_err char = %c", c));
         r++;
         tok_add(ctx, tok_err, l, r);
     }
@@ -2085,7 +2089,8 @@ static Closure *closure_get(Ctx *ctx, int closure_i) {
 // 外部関数フレーム
 // -----------------------------------------------
 
-static void extern_frame_activate(Ctx *ctx, int arg_array_i, int result_cell_i) {
+static void extern_frame_activate(Ctx *ctx, int arg_array_i,
+                                  int result_cell_i) {
     assert(!ctx->extern_calling);
 
     ctx->extern_calling = true;
@@ -2765,8 +2770,4 @@ void negi_lang_eval_for_testing(const char *src, int *exit_code,
 
     *exit_code = ctx->exit_code;
     *output = err_summary(ctx);
-}
-
-void _trace(const char *file_name, int line, const char *message) {
-    fprintf(stderr, "[%s:%04d] %s\n", file_name, line, message);
 }

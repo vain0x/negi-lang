@@ -725,7 +725,8 @@ extern void negi_lang_test_util();
 extern const char *negi_lang_tokenize_dump(const char *src);
 extern const char *negi_lang_parse_dump(const char *src);
 extern const char *negi_lang_gen_dump(const char *src);
-extern void negi_lang_eval_for_testing(const char *src, int * exit_code, const char **output);
+extern void negi_lang_eval_for_testing(const char *src, int *exit_code,
+                                       const char **output);
 
 // ###############################################
 // デバッグ用
@@ -746,14 +747,12 @@ extern void negi_lang_eval_for_testing(const char *src, int * exit_code, const c
 // -----------------------------------------------
 
 #ifdef _DEBUG
-#define d_trace(X) _trace(__FILE__, __LINE__, X)
+#define trace(X) do_trace(__FILE__, __LINE__, X)
 #define debug(A) //
 
-extern void _trace(const char *file_name, int line, const char *message);
-
 #else
-#define d_trace(A) //
-#define debug(A)   //
+#define trace(A) //
+#define debug(A) //
 #endif
 
 #endif
