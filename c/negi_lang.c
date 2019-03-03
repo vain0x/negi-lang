@@ -1174,7 +1174,7 @@ static void scope_push(Ctx *ctx, int tok_i) {
     ctx->scope_i_current = scope_i;
 }
 
-static void scope_pop(Ctx *ctx, int tok_i) {
+static void scope_pop(Ctx *ctx) {
     Scope *scope = scope_get(ctx, ctx->scope_i_current);
 
     assert(scope->parent >= 0);
@@ -1314,7 +1314,7 @@ static void loop_pop(Ctx *ctx) {
     ctx->loops.len--;
 }
 
-static Loop* loop_current_or_null(Ctx *ctx) {
+static Loop *loop_current_or_null(Ctx *ctx) {
     if (ctx->loops.len == 0) {
         return NULL;
     }
@@ -1365,6 +1365,11 @@ static void cmd_add_str(Ctx *ctx, CmdKind kind, const char *str, int tok_i) {
 
 static void cmd_add(Ctx *ctx, CmdKind kind, int tok_i) {
     cmd_add_int(ctx, kind, 0, tok_i);
+}
+
+static void cmd_add_closure(Ctx *ctx, int fun_i, int tok_i) {
+    assert(0 <= fun_i && fun_i < ctx->funs.len);
+    cmd_add_int(ctx, cmd_push_closure, fun_i, tok_i);
 }
 
 static void cmd_add_local_var(Ctx *ctx, int index, int scope_i, int tok_i) {
@@ -1564,7 +1569,45 @@ static void gen_op(Ctx *ctx, int exp_i, bool lval) {
     cmd_add_op(ctx, op, tok_i);
 }
 
-static void gen_fun(Ctx *ctx, int exp_i) { failwith("unimplemented"); }
+static void gen_fun(Ctx *ctx, int exp_i) {
+    defexp;
+    assert(exp->kind == exp_fun);
+    int body_exp_i = exp->exp_l;
+
+    int body_label_i = label_add(ctx);
+    int next_label_i = label_add(ctx);
+
+    // 関数本体が実行されないようにスキップする。
+    cmd_add_goto(ctx, next_label_i, exp->tok_i);
+
+    // 関数の入り口
+    cmd_add_label(ctx, body_label_i, exp->tok_i);
+
+    scope_push(ctx, exp->tok_i);
+    int scope_i = ctx->scope_i_current;
+
+    // 仮引数リストを解析する。
+    for (int subexp_i = exp->subexp_l; subexp_i < exp->subexp_r; subexp_i++) {
+        Exp *param = exp_get(ctx, subexp_get(ctx, subexp_i)->exp_i);
+        if (param->kind != exp_ident) {
+            cmd_add_err(ctx, "仮引数は識別子でなければいけません。",
+                        param->tok_i);
+            continue;
+        }
+
+        local_add_var(ctx, param->str_value, param->tok_i);
+    }
+
+    // 関数本体を解析する。
+    gen_exp(ctx, body_exp_i);
+    cmd_add(ctx, cmd_return, exp->tok_i);
+
+    scope_pop(ctx);
+    int fun_i = fun_add_closure(ctx, scope_i, body_label_i);
+
+    cmd_add_label(ctx, next_label_i, exp->tok_i);
+    cmd_add_closure(ctx, fun_i, exp->tok_i);
+}
 
 static void gen_let(Ctx *ctx, int exp_i) {
     defexp;
@@ -1646,14 +1689,21 @@ static void gen_break(Ctx *ctx, int exp_i) {
 
     Loop *loop = loop_current_or_null(ctx);
     if (loop == NULL) {
-        cmd_add_err(ctx, "ループの外側では break を使用できません。", exp->tok_i);
+        cmd_add_err(ctx, "ループの外側では break を使用できません。",
+                    exp->tok_i);
         return;
     }
 
     cmd_add_goto(ctx, loop->break_label_i, exp->tok_i);
- }
+}
 
-static void gen_return(Ctx *ctx, int exp_i) { failwith("unimplemented"); }
+static void gen_return(Ctx *ctx, int exp_i) {
+    defexp;
+    assert(exp->kind == exp_return);
+
+    gen_exp(ctx, exp->exp_l);
+    cmd_add(ctx, cmd_return, exp->tok_i);
+}
 
 static void gen_lval(Ctx *ctx, int exp_i) {
     defexp;
@@ -1859,9 +1909,10 @@ static void frame_push(Ctx *ctx, int cmd_i, int env_i, int tok_i) {
     };
 }
 
-static void frame_pop(Ctx *ctx) {
+static Frame *frame_pop(Ctx *ctx) {
     assert(ctx->frames.len >= 1);
-    ctx->frames.len--;
+    int frame_i = --ctx->frames.len;
+    return &ctx->frames.data[frame_i];
 }
 
 static Frame *frame_current(Ctx *ctx) {
@@ -2186,9 +2237,53 @@ static void eval_dup(Ctx *ctx, int cmd_i) {
     stack_push(ctx, first);
 }
 
-static void eval_call(Ctx *ctx, int cmd_i) { unimplemented(); }
+static void eval_call(Ctx *ctx, int cmd_i) {
+    defcmd;
+    assert(cmd->kind == cmd_call);
+    int len = cmd->x;
 
-static void eval_return(Ctx *ctx, int cmd_i) { unimplemented(); }
+    Cell args[32];
+    if (len >= array_len(args)) {
+        unimplemented();
+    }
+    for (int i = len - 1; i >= 0; i--) {
+        args[i] = stack_pop(ctx);
+    }
+    Cell fun = stack_pop(ctx);
+
+    if (fun.ty == ty_closure) {
+        int closure_i = fun.val;
+        Closure *closure = closure_get(ctx, closure_i);
+        assert(fun_get(ctx, closure->fun_i)->kind == fun_kind_closure);
+
+        int body_label_i = fun_get(ctx, closure->fun_i)->label_i;
+
+        // ローカル環境を生成する。
+        int env_i = env_add(ctx, closure->env_i, closure->fun_i);
+
+        Env *env = env_get(ctx, env_i);
+        for (int i = 0; i < len; i++) {
+            array_set_item(ctx, env->array_i, i, args[i]);
+        }
+
+        frame_push(ctx, ctx->pc, env_i, cmd->tok_i);
+        ctx->pc = label_get(ctx, body_label_i)->cmd_i;
+        return;
+    }
+
+    if (fun.ty == ty_closure) {
+        unimplemented();
+    }
+
+    eval_abort(ctx, "型エラー", cmd->tok_i);
+}
+
+static void eval_return(Ctx *ctx, int cmd_i) {
+    defcmd;
+    assert(cmd->kind == cmd_return);
+
+    ctx->pc = frame_pop(ctx)->cmd_i;
+}
 
 static void eval_op(Ctx *ctx, int cmd_i) {
     defcmd;
