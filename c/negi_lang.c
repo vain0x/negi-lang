@@ -1226,12 +1226,13 @@ static bool local_find_var(Ctx *ctx, const char *ident, int tok_i,
             return true;
         }
 
-        assert(scope_i >= 0);
         Scope *scope = scope_get(ctx, scope_i);
         assert(scope_i != scope->parent);
+        if (scope->parent < 0) {
+            return false;
+        }
         scope_i = scope->parent;
     }
-    return false;
 }
 
 // -----------------------------------------------

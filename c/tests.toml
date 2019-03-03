@@ -185,6 +185,77 @@ err = """
 exit = 1
 
 [[eval]]
+name = "変数を使える"
+src = """
+    let a = 21;
+    let b = 2;
+    a * b
+"""
+exit = 42
+
+[[eval]]
+name = "変数に配列を入れられる"
+src = """
+    let a = [1];
+    let b = [a];
+    b[0][0]
+"""
+exit = 1
+
+[[eval]]
+name = "未定義の変数の参照はエラー"
+src = """
+    let a = a + 1
+"""
+err = """
+    1:13..1:14 near 'a'
+        未定義の変数を使用しています。
+"""
+exit = 1
+
+[[eval]]
+name = "代入できる"
+src = """
+    let a = 21;
+    a = a * 2;
+    a
+"""
+exit = 42
+
+[[eval]]
+name = "未定義の変数への代入はエラー"
+src = """
+    a = 0
+"""
+err = """
+    1:5..1:6 near 'a'
+        未定義の変数を使用しています。
+"""
+exit = 1
+
+[[eval]]
+name = "代入の右辺に term を書ける"
+src = """
+    let a = 1;
+    a = 0 == 0 ? 2 : 0;
+    a
+"""
+exit = 2
+
+[[eval]]
+name = "複合代入ができる"
+src = """
+    let a = 0;
+    a += 250;
+    a -= 8;
+    a *= 2;
+    a /= 2;
+    a %= 100;
+    a
+"""
+exit = 42
+
+[[eval]]
 name = "ローカル変数に加算代入などができる"
 src = """
     let a = 2; a += 1; a *= 14; a
