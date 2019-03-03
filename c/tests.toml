@@ -316,6 +316,48 @@ src = """
 exit = 1
 
 [[eval]]
+name = "while が使える"
+src = """
+    let i = 0;
+    while (i < 10) {
+        i = i + 1
+    }
+    i
+"""
+exit = 10
+
+[[eval]]
+name = "break が使える"
+src = """
+    let x = 25;
+    let p = 2;
+    while (p < x) {
+        if (x % p == 0) { break }
+        p = p + 1
+    }
+    p
+"""
+exit = 5
+
+[[eval]]
+name = "入れ子の while で break できる (2~10 の最小の素因数の総和をとる)"
+src = """
+    let s = 0;
+    let x = 2;
+    while (x < 10) {
+        let p = 2;
+        while (p < x) {
+            if (x % p == 0) { break }
+            p = p + 1
+        }
+        s = s + p;
+        x = x + 1;
+    }
+    s
+"""
+exit = 26
+
+[[eval]]
 name = "ローカル変数に加算代入などができる"
 src = """
     let a = 2; a += 1; a *= 14; a

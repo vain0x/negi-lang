@@ -1314,6 +1314,13 @@ static void loop_pop(Ctx *ctx) {
     ctx->loops.len--;
 }
 
+static Loop* loop_current_or_null(Ctx *ctx) {
+    if (ctx->loops.len == 0) {
+        return NULL;
+    }
+    return &ctx->loops.data[ctx->loops.len - 1];
+}
+
 // -----------------------------------------------
 // 命令リスト
 // -----------------------------------------------
@@ -1601,9 +1608,50 @@ static void gen_if(Ctx *ctx, int exp_i) {
     cmd_add_label(ctx, end_label_i, tok_i);
 }
 
-static void gen_while(Ctx *ctx, int exp_i) { failwith("unimplemented"); }
+// スタックに何らかの値をちょうど1つ積んだ状態で終了するように気をつける。
+static void gen_while(Ctx *ctx, int exp_i) {
+    defexp;
+    assert(exp->kind == exp_while);
+    int cond_exp_i = exp->exp_cond;
+    int body_exp_i = exp->exp_l;
+    int tok_i = exp->tok_i;
 
-static void gen_break(Ctx *ctx, int exp_i) { failwith("unimplemented"); }
+    int continue_label_i = label_add(ctx);
+    int break_label_i = label_add(ctx);
+
+    loop_push(ctx, break_label_i);
+
+    // l_continue: do cond; if false, break
+    cmd_add_label(ctx, continue_label_i, tok_i);
+
+    gen_exp(ctx, cond_exp_i);
+    cmd_add_jump_unless(ctx, break_label_i, tok_i);
+
+    // do body; pop; continue
+    gen_exp(ctx, body_exp_i);
+    cmd_add(ctx, cmd_pop, tok_i);
+
+    cmd_add_goto(ctx, continue_label_i, tok_i);
+
+    // l_break: push null
+    cmd_add_label(ctx, break_label_i, tok_i);
+    cmd_add_null(ctx, tok_i);
+
+    loop_pop(ctx);
+}
+
+static void gen_break(Ctx *ctx, int exp_i) {
+    defexp;
+    assert(exp->kind == exp_break);
+
+    Loop *loop = loop_current_or_null(ctx);
+    if (loop == NULL) {
+        cmd_add_err(ctx, "ループの外側では break を使用できません。", exp->tok_i);
+        return;
+    }
+
+    cmd_add_goto(ctx, loop->break_label_i, exp->tok_i);
+ }
 
 static void gen_return(Ctx *ctx, int exp_i) { failwith("unimplemented"); }
 
