@@ -521,13 +521,13 @@ typedef struct VecExternFun {
 // 外部関数フレーム
 // -----------------------------------------------
 
-typedef struct ExternFunFrame {
+typedef struct ExternFrame {
     bool err;
     const char *err_message;
 
     int arg_array_i;
     int result_cell_i;
-} ExternFunFrame;
+} ExternFrame;
 
 // -----------------------------------------------
 // ループスタック
@@ -712,7 +712,7 @@ struct NegiLangContext {
     VecClosure closures;
 
     bool extern_calling;
-    ExternFunFrame extern_fun_frame;
+    ExternFrame extern_frame;
 
     // プログラムカウンタ。次に実行するコマンド番号。
     int pc;

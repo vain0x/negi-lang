@@ -367,6 +367,11 @@ err = """
 exit = 1
 
 [[eval]]
+name = "組み込み関数を呼べる"
+src = "array_len([1, 2, 3])"
+exit = 3
+
+[[eval]]
 name = "ラムダ式を使える"
 src = """
     let f = fun() { return 42 };
@@ -451,6 +456,27 @@ src = """
     a
 """
 exit = 2
+
+[[eval]]
+name = "配列が自動で拡張される"
+src = """
+    let a = [];
+    array_push(a, 1);
+    array_push(a, 2);
+    array_push(a, 3);
+    ((a[0] * 10 + a[1]) * 10 + a[2]) * 10 + array_len(a)
+"""
+exit = 1233
+
+[[eval]]
+name = "配列の要素に代入できる"
+src = """
+    let a = [1];
+    let b = a;
+    a[0] = 42;
+    b[0]
+"""
+exit = 42
 
 [[eval]]
 name = "ローカル変数に加算代入などができる"

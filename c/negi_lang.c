@@ -9,6 +9,8 @@
 
 #define array_len(X) (sizeof(X) / sizeof(*X))
 
+static void extern_fun_builtin(Ctx *ctx);
+
 // ###############################################
 // 汎用: デバッグ用
 // ###############################################
@@ -1283,6 +1285,11 @@ static int extern_fun_add(Ctx *ctx, const char *name, extern_fun_t fun) {
     return extern_fun_i;
 }
 
+static ExternFun *extern_fun_get(Ctx *ctx, int extern_fun_i) {
+    assert(0 <= extern_fun_i && extern_fun_i < ctx->extern_funs.len);
+    return &ctx->extern_funs.data[extern_fun_i];
+}
+
 static bool extern_fun_find(Ctx *ctx, const char *name, int *extern_fun_i) {
     for (int i = 0; i < ctx->extern_funs.len; i++) {
         if (strcmp(ctx->extern_funs.data[i].name, name) == 0) {
@@ -2075,6 +2082,42 @@ static Closure *closure_get(Ctx *ctx, int closure_i) {
 }
 
 // -----------------------------------------------
+// 外部関数フレーム
+// -----------------------------------------------
+
+static void extern_frame_activate(Ctx *ctx, int arg_array_i, int result_cell_i) {
+    assert(!ctx->extern_calling);
+
+    ctx->extern_calling = true;
+    ctx->extern_frame = (ExternFrame){
+        .err = false,
+        .arg_array_i = arg_array_i,
+        .result_cell_i = result_cell_i,
+    };
+}
+
+static void extern_frame_deactivate(Ctx *ctx) {
+    ctx->extern_calling = false;
+    ctx->extern_frame = (ExternFrame){};
+}
+
+static void extern_frame_resolve(Ctx *ctx, Cell result) {
+    assert(ctx->extern_calling);
+    *cell_get(ctx, ctx->extern_frame.result_cell_i) = result;
+}
+
+static void extern_frame_reject(Ctx *ctx, const char *message) {
+    assert(ctx->extern_calling);
+    ctx->extern_frame.err = true;
+    ctx->extern_frame.err_message = message;
+}
+
+static Array *extern_frame_args(Ctx *ctx) {
+    assert(ctx->extern_calling);
+    return array_get(ctx, ctx->extern_frame.arg_array_i);
+}
+
+// -----------------------------------------------
 // 評価
 // -----------------------------------------------
 
@@ -2271,8 +2314,29 @@ static void eval_call(Ctx *ctx, int cmd_i) {
         return;
     }
 
-    if (fun.ty == ty_closure) {
-        unimplemented();
+    if (fun.ty == ty_extern) {
+        int extern_fun_i = fun.val;
+
+        int array_i = array_add(ctx, len, len);
+
+        CellIndexPair result_cell_range = heap_alloc(ctx, 1);
+        int result_cell_i = result_cell_range.cell_l;
+
+        for (int i = 0; i < len; i++) {
+            array_set_item(ctx, array_i, i, args[i]);
+        }
+
+        extern_frame_activate(ctx, array_i, result_cell_i);
+        extern_fun_get(ctx, extern_fun_i)->fun(ctx, len);
+
+        if (ctx->extern_frame.err) {
+            eval_abort(ctx, ctx->extern_frame.err_message, cmd->tok_i);
+        } else {
+            stack_push(ctx, *cell_get(ctx, result_cell_i));
+        }
+
+        extern_frame_deactivate(ctx);
+        return;
     }
 
     eval_abort(ctx, "型エラー", cmd->tok_i);
@@ -2514,6 +2578,39 @@ static void eval(Ctx *ctx) {
 }
 
 // ###############################################
+// 組み込み関数
+// ###############################################
+
+#define xargs extern_frame_args(ctx)
+#define xarg_nth(i) (cell_get(ctx, xargs->cell_l + (i)))
+#define xarg_ty(i) (xarg_nth(i)->ty)
+#define xarg_val(i) (xarg_nth(i)->val)
+
+static void builtin_array_len(Ctx *ctx, int argc) {
+    if (argc != 1 || xarg_ty(0) != ty_array) {
+        extern_frame_reject(ctx, "array_len error");
+        return;
+    }
+
+    int len = array_get(ctx, xarg_val(0))->len;
+    extern_frame_resolve(ctx, (Cell){.ty = ty_int, .val = len});
+}
+
+static void builtin_array_push(Ctx *ctx, int argc) {
+    if (argc != 2 || xarg_ty(0) != ty_array) {
+        extern_frame_reject(ctx, "array_push error");
+        return;
+    }
+
+    array_push(ctx, xarg_val(0), *xarg_nth(1));
+}
+
+static void extern_fun_builtin(Ctx *ctx) {
+    extern_fun_add(ctx, "array_len", builtin_array_len);
+    extern_fun_add(ctx, "array_push", builtin_array_push);
+}
+
+// ###############################################
 // テスト
 // ###############################################
 
@@ -2522,6 +2619,7 @@ Ctx *ctx_new(const char *src) {
 
     *ctx = (Ctx){};
 
+    extern_fun_builtin(ctx);
     src_initialize(ctx, src);
     return ctx;
 }
