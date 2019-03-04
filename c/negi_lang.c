@@ -920,9 +920,10 @@ static int parse_cond(Ctx *ctx, int *tok_i) {
 }
 
 int parse_term(Ctx *ctx, int *tok_i) {
-    assert(tok_leads_term(tok_kind(ctx, *tok_i)));
-
     TokKind kind = tok_kind(ctx, *tok_i);
+
+    assert(tok_leads_term(kind) || kind == tok_eof);
+
     if (kind == tok_fun) {
         return parse_fun(ctx, tok_i);
     }
