@@ -969,24 +969,25 @@
 	return exp_i
 
 #defcfunc negi_lang_parse_atom var tok_i, \
-	local value, local exp_i, local op_tok_i
+	local kind, local value, local exp_i, local op_tok_i, local err_tok_i
 
-	if s_tok_kinds(tok_i) == tok_int {
+	kind = s_tok_kinds(tok_i)
+	if kind == tok_int {
 		value = int(negi_lang_tok_text(tok_i))
 		exp_i = negi_lang_exp_add_int(exp_int, value, tok_i)
 		tok_i++
 		return exp_i
 	}
-	if s_tok_kinds(tok_i) == tok_str {
+	if kind == tok_str {
 		return negi_lang_parse_str(tok_i)
 	}
-	if s_tok_kinds(tok_i) == tok_ident {
+	if kind == tok_ident {
 		value = negi_lang_tok_text(tok_i)
 		exp_i = negi_lang_exp_add_str(exp_ident, value, tok_i)
 		tok_i++
 		return exp_i
 	}
-	if s_tok_kinds(tok_i) == tok_paren_l {
+	if kind == tok_paren_l {
 		op_tok_i = tok_i
 		tok_i++
 		exp_i = negi_lang_parse_term(tok_i)
@@ -996,14 +997,16 @@
 		tok_i++
 		return exp_i
 	}
-	if s_tok_kinds(tok_i) == tok_bracket_l {
+	if kind == tok_bracket_l {
 		return negi_lang_parse_array(tok_i)
 	}
 
 	// 項のパースができなかったので、次のトークンが項の始まりを表すものではないことが分かる。
-	assert tok_leads_term(s_tok_kinds(tok_i)) == false
-
-	return negi_lang_exp_add_err("Expected an expression", tok_i)
+	err_tok_i = tok_i
+	if kind != tok_eof {
+		tok_i++
+	}
+	return negi_lang_exp_add_err("式が必要です。", err_tok_i)
 
 // 後置式をパースする。
 // ここでは `x[i]` のように式の後ろにつく種類の式を後置式を呼んでいる。
@@ -1061,15 +1064,15 @@
 	if s_tok_kinds(tok_i) == tok_op {
 		op_tok_i = tok_i
 		op_text = negi_lang_tok_text(tok_i)
+		tok_i++
 
 		if op_text == "-" {
-			tok_i++
 			exp_l = negi_lang_exp_add_int(exp_int, 0, op_tok_i)
 			exp_r = negi_lang_parse_suffix(tok_i)
 			return negi_lang_exp_add_bin(op_sub, exp_l, exp_r, op_tok_i)
 		}
 
-		return negi_lang_exp_add_err("この演算子は前置演算子ではありません。", tok_i)
+		return negi_lang_exp_add_err("この演算子は前置演算子ではありません。", op_tok_i)
 	}
 
 	return negi_lang_parse_suffix(tok_i)
@@ -1205,11 +1208,19 @@
 
 	return negi_lang_exp_add_if(cond_exp_i, then_exp_i, else_exp_i, question_tok_i)
 
-#defcfunc negi_lang_parse_term var tok_i
+#defcfunc negi_lang_parse_term var tok_i, \
+	local kind
 
-	assert tok_leads_term(s_tok_kinds(tok_i))
+	kind = s_tok_kinds(tok_i)
 
-	if s_tok_kinds(tok_i) == tok_fun {
+	if kind == tok_eof {
+		return negi_lang_exp_add_err("式が必要です。", tok_i)
+	}
+	if tok_leads_term(kind) == false {
+		tok_i++
+		return negi_lang_exp_add_err("式が必要です。", tok_i - 1)
+	}
+	if kind == tok_fun {
 		return negi_lang_parse_fun(tok_i)
 	}
 	return negi_lang_parse_cond(tok_i)
