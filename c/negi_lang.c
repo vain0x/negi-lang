@@ -922,7 +922,9 @@ static int parse_cond(Ctx *ctx, int *tok_i) {
 int parse_term(Ctx *ctx, int *tok_i) {
     TokKind kind = tok_kind(ctx, *tok_i);
 
-    assert(tok_leads_term(kind) || kind == tok_eof);
+    if (!tok_leads_term(kind)) {
+        return exp_add_err(ctx, "式が必要です。", *tok_i);
+    }
 
     if (kind == tok_fun) {
         return parse_fun(ctx, tok_i);
