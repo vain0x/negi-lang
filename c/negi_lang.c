@@ -744,6 +744,8 @@ static int parse_fun(Ctx *ctx, int *tok_i) {
 
 static int parse_atom(Ctx *ctx, int *tok_i) {
     switch (tok_kind(ctx, *tok_i)) {
+    case tok_eof:
+        return exp_add_err(ctx, "式が必要です。", *tok_i);
     case tok_int: {
         int value = atol(tok_text(ctx, *tok_i));
         return exp_add_int(ctx, exp_int, value, bump(tok_i));
