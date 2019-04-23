@@ -2030,23 +2030,45 @@
 
 #deffunc negi_lang_cell_gc_begin
 
+	// README に書いてある通り、gc_map はGC段階によって異なる意味を持つ。
+	// mark フェイズでは、true ならセルがマーク済みであることを表す。
+	// 		gc_map(cell_i) = true
+	// move フェイズでは、セルの移動先の位置を表す。セルが破棄された場合は -1
+	// 		gc_map(old_i) = new_i
 	dim s_cell_gc_map, s_cell_len
 	s_cell_gc_map_len = 0
+
+	// スタック。マーク済みの参照セルで、まだ値にマークする処理が済んでいないものを積んでいく。
+	dim s_cell_gc_stack
+	s_cell_gc_stack_len = 0
 	return
 
-#deffunc negi_lang_cell_gc_mark int cell_i, \
-	local ty, local val
+#deffunc negi_lang_cell_gc_mark int cell_i
 
 	if s_cell_gc_map(cell_i) { return }
 
 	s_cell_gc_map(cell_i) = true
-	ty = s_cell_tys(cell_i)
-	val = s_cell_vals(cell_i)
+	s_cell_gc_stack(s_cell_gc_stack_len) = cell_i
+	s_cell_gc_stack_len++
+	return
 
-	if ty == ty_array {
-		negi_lang_array_gc_mark val
-		return
-	}
+#deffunc negi_lang_cell_gc_mark_loop var stuck, \
+	local cell_i, local ty, local val
+
+	repeat
+		if s_cell_gc_stack_len == 0 { break }
+
+		stuck = false
+		s_cell_gc_stack_len--
+		cell_i = s_cell_gc_stack(s_cell_gc_stack_len)
+
+		ty = s_cell_tys(cell_i)
+		val = s_cell_vals(cell_i)
+
+		if ty == ty_array {
+			negi_lang_array_gc_mark val
+		}
+	loop
 	return
 
 #deffunc negi_lang_cell_gc_mark_stack
@@ -2229,6 +2251,9 @@
 
 	dim s_array_gc_map, s_array_len
 	s_array_gc_map_len = 0
+
+	dim s_array_gc_stack
+	s_array_gc_stack_len = 0
 	return
 
 #deffunc negi_lang_array_gc_mark int array_i
@@ -2236,9 +2261,23 @@
 	if s_array_gc_map(array_i) { return }
 
 	s_array_gc_map(array_i) = true
+	s_array_gc_stack(s_array_gc_stack_len) = array_i
+	s_array_gc_stack_len++
+	return
 
-	repeat s_array_lens(array_i), s_array_cell_ls(array_i)
-		negi_lang_cell_gc_mark cnt
+#deffunc negi_lang_array_gc_mark_loop var stuck, \
+	local array_i
+
+	repeat
+		if s_array_gc_stack_len == 0 { break }
+
+		stuck = false
+		s_array_gc_stack_len--
+		array_i = s_array_gc_stack(s_array_gc_stack_len)
+
+		repeat s_array_lens(array_i), s_array_cell_ls(array_i)
+			negi_lang_cell_gc_mark cnt
+		loop
 	loop
 	return
 
@@ -3047,7 +3086,8 @@
 
 // 詳細は README のガベージコレクションの節を参照。
 
-#deffunc negi_lang_gc_run
+#deffunc negi_lang_gc_run \
+	local stuck
 
 	d_trace "GC run"
 
@@ -3060,6 +3100,15 @@
 	negi_lang_cell_gc_mark_stack
 	negi_lang_frame_gc_mark_all
 	negi_lang_env_gc_mark_all
+
+	repeat
+		stuck = true
+
+		negi_lang_cell_gc_mark_loop stuck
+		negi_lang_array_gc_mark_loop stuck
+
+		if stuck { break }
+	loop
 
 	// 生きているオブジェクトを再配置する。
 	negi_lang_cell_gc_move
