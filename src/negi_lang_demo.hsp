@@ -28,7 +28,12 @@
 	x_define "hsp3_await", *l_hsp3_await
 	x_define "hsp3_event_kind", *l_hsp3_event_kind
 	x_define "hsp3_event_obj_id", *l_hsp3_event_obj_id
+	x_define "hsp3_boxf", *l_hsp3_boxf
 	x_define "hsp3_button", *l_hsp3_button
+	x_define "hsp3_color", *l_hsp3_color
+	x_define "hsp3_mousex", *l_hsp3_mousex
+	x_define "hsp3_mousey", *l_hsp3_mousey
+	x_define "hsp3_redraw", *l_hsp3_redraw
 	return
 
 *l_hsp3_await
@@ -48,6 +53,11 @@
 	x_result_int s_event_obj_id
 	return
 
+*l_hsp3_boxf
+
+	boxf x_arg_int(0), x_arg_int(0), x_arg_int(2), x_arg_int(3)
+	return
+
 *l_hsp3_button
 
 	button gosub x_arg_str(0), *l_hsp3_button_click
@@ -58,6 +68,26 @@
 
 	s_event_kind = "button"
 	s_event_obj_id = stat // オブジェクト ID
+	return
+
+*l_hsp3_color
+
+	color x_arg_int(0), x_arg_int(1), x_arg_int(2)
+	return
+
+*l_hsp3_mousex
+
+	x_result_int mousex
+	return
+
+*l_hsp3_mousey
+
+	x_result_int mousey
+	return
+
+*l_hsp3_redraw
+
+	redraw x_arg_int(0)
 	return
 
 #deffunc app_eval str src, \
@@ -106,7 +136,29 @@
 		button("Hello", fun() mes("Hello!"));
 		button("Bye", fun() mes("Bye!"));
 
+		let render = fun() {
+			let mx = hsp3_mousex();
+			let my = hsp3_mousey();
+			let winx = 640;
+			let winy = 480;
+
+			hsp3_redraw(2);
+			hsp3_color(0, 0, 0);
+			if (100 <= mx) {
+				if (mx <= 150) {
+					if (100 <= my) {
+						if (my <= 150) {
+							hsp3_color(192, 0, 0);
+						}
+					}
+				}
+			}
+			hsp3_boxf(100, 100, 150, 150);
+			hsp3_redraw(1);
+		};
+
 		while (0 == 0) {
+			render();
 			poll();
 		};
 		0
