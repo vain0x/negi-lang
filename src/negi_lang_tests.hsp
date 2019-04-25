@@ -363,6 +363,50 @@
 		b[0]
 	"}, "", 42
 
+	eval_test "マップが使える", {"
+		let map = {};
+		map["answer"] = 42;
+		map["answer"]
+	"}, "", 42
+	eval_test "マップの要素を変更できる", {"
+		let map = {};
+		map["answer"] = 41;
+		map["answer"] += 1;
+		map["answer"]
+	"}, "", 42
+	eval_test "マップで複数の要素を使える", {"
+		let map = {};
+		map["ans"] = 84;
+		map["wer"] = 2;
+		map["ans"] / map["wer"]
+	"}, "", 42
+	eval_test "マップの中にマップや関数を入れられる", {"
+		let map = {};
+		map["inner"] = {};
+		map["inner"]["answer"] = 84;
+		map["div"] = fun() 2;
+		map["inner"]["answer"] / map["div"]()
+	"}, "", 42
+	eval_test "マップをオブジェクトとして使える", {"
+		let make_counter = fun() {
+			let self = {};
+			let current = 0;
+			self["last"] = fun() current;
+			self["next"] = fun() {
+				current += 1;
+				current
+			};
+			self
+		};
+
+		let counter = make_counter();
+		let s = counter["next"]();
+		s = s * 10 + counter["last"]();
+		s = s * 10 + counter["next"]();
+		s = s * 10 + counter["last"]();
+		s
+	"}, "", 1122
+
 	eval_test "GC のおかげで無限に配列や環境を生成できる", {"
 		__dev_heap_make_tiny();
 		let f = 0;

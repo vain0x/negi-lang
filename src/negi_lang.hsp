@@ -128,6 +128,9 @@
 // subexp: 要素
 #enum exp_array
 
+// マップリテラル
+#enum exp_map
+
 // 識別子
 #enum exp_ident
 
@@ -242,6 +245,9 @@
 // x: キャパシティ
 #enum cmd_push_array
 
+// 空のマップを生成してプッシュする
+#enum cmd_push_map
+
 // クロージャを生成してプッシュする
 // x: 関数番号
 #enum cmd_push_closure
@@ -293,6 +299,9 @@
 
 // 配列。値は s_arrays の要素番号。
 #enum ty_array
+
+// マップ。値は s_maps の要素番号。
+#enum ty_map
 
 // クロージャ。値は s_closures の要素番号。
 #enum ty_closure
@@ -637,8 +646,8 @@
 // トークンが項の始まりを表すか否か。
 #define ctype tok_leads_term(%1) \
 	((%1) == tok_int || (%1) == tok_str || (%1) == tok_ident \
-	|| (%1) == tok_paren_l || (%1) == tok_bracket_l || (%1) == tok_fun \
-	|| (%1) == tok_op \
+	|| (%1) == tok_paren_l || (%1) == tok_bracket_l || (%1) == tok_brace_l \
+	|| (%1) == tok_fun || (%1) == tok_op \
 	)
 
 // トークンが文の始まりを表すか否か。
@@ -842,6 +851,22 @@
 	tok_i++
 	return exp_i
 
+#defcfunc negi_lang_parse_map var tok_i, \
+	local exp_i, local brace_tok_i
+
+	brace_tok_i = tok_i
+	tok_i++
+
+	// FIXME: マップリテラルの中身をパースする。
+
+	exp_i = negi_lang_exp_add_int(exp_map, 0, brace_tok_i)
+
+	if s_tok_kinds(tok_i) != tok_brace_r {
+		return negi_lang_exp_add_err("波カッコが閉じられていません。", brace_tok_i)
+	}
+	tok_i++
+	return exp_i
+
 #defcfunc negi_lang_parse_block var tok_i, \
 	local brace_tok_i, local exp_i
 
@@ -999,6 +1024,9 @@
 	}
 	if kind == tok_bracket_l {
 		return negi_lang_parse_array(tok_i)
+	}
+	if kind == tok_brace_l {
+		return negi_lang_parse_map(tok_i)
 	}
 
 	// 項のパースができなかったので、次のトークンが項の始まりを表すものではないことが分かる。
@@ -1623,6 +1651,16 @@
 	loop
 	return
 
+#deffunc negi_lang_gen_exp_map int exp_i, \
+	local tok_i
+
+	assert s_exp_kinds(exp_i) == exp_map
+	tok_i = s_exp_tok_is(exp_i)
+
+	negi_lang_cmd_add_int cmd_push_map, 0, tok_i
+	// FIXME: マップリテラルを構築する
+	return
+
 #deffunc negi_lang_gen_exp_call int exp_i, \
 	local subexp_l, local subexp_r, local len, local tok_i
 
@@ -1928,6 +1966,10 @@
 	}
 	if s_exp_kinds(exp_i) == exp_array {
 		negi_lang_gen_exp_array exp_i
+		return
+	}
+	if s_exp_kinds(exp_i) == exp_map {
+		negi_lang_gen_exp_map exp_i
 		return
 	}
 	if s_exp_kinds(exp_i) == exp_ident {
@@ -2424,6 +2466,96 @@
 	return
 
 // -----------------------------------------------
+// マップリスト
+// -----------------------------------------------
+
+#deffunc negi_lang_map_initialize \
+
+	// keys: エントリのキーからなる配列
+	// vals: エントリの値からなる配列
+	// keys, vals が指す配列の i 番目の要素 k, v を一対のエントリーとみなす。(連想リスト形式)
+	dim s_map_keys_is
+	dim s_map_vals_is
+	s_map_len = 0
+	return
+
+#defcfunc negi_lang_map_add \
+	local map_i
+
+	s_map_len++
+	map_i = s_map_len - 1
+	s_map_keys_is(map_i) = negi_lang_array_add(0, 0)
+	s_map_vals_is(map_i) = negi_lang_array_add(0, 0)
+	return map_i
+
+#defcfunc negi_lang_map_ref \
+	int map_ty, int map_i, int key_ty, int key_val, \
+	local len, local keys_i, local vals_i, \
+	local entry_key_ty, local entry_key_val, \
+	local entry_val_ty, local entry_val_val, \
+	local cell_i
+
+	assert map_ty == ty_map
+	assert 0 <= map_i && map_i < s_map_len
+
+	// FIXME: 文字列でない値をマップのキーとして使えるようにする。
+	if key_ty != ty_str {
+		negi_lang_eval_abort "文字列でない値をマップのキーとする機能は未実装です", 0
+		return 0
+	}
+	assert 0 <= key_val && key_val < s_str_len
+
+	keys_i = s_map_keys_is(map_i)
+	vals_i = s_map_vals_is(map_i)
+	len = s_array_lens(keys_i)
+	assert s_array_lens(vals_i) == len
+
+	// キーを探索する。
+	cell_i = -1
+
+	repeat len
+		negi_lang_array_get ty_array, keys_i, cnt, entry_key_ty, entry_key_val
+
+		if entry_key_ty != key_ty {
+			continue
+		}
+		if s_strs(entry_key_val) != s_strs(key_val) {
+			continue
+		}
+
+		cell_i = negi_lang_array_ref(ty_array, vals_i, cnt)
+		break
+	loop
+
+	// キーが存在しないなら追加する。
+	if cell_i < 0 {
+		negi_lang_array_push ty_array, keys_i, key_ty, key_val
+		negi_lang_array_push ty_array, vals_i, ty_int, 0 // FIXME: use null
+		len++
+
+		cell_i = negi_lang_array_ref(ty_array, vals_i, len - 1)
+	}
+	return cell_i
+
+#deffunc negi_lang_map_get \
+	int map_ty, int map_i, int key_ty, int key_val, var val_ty, var val_val, \
+	local cell_i
+
+	cell_i = negi_lang_map_ref(map_ty, map_i, key_ty, key_val)
+	val_ty = s_cell_tys(cell_i)
+	val_val = s_cell_vals(cell_i)
+	return
+
+#deffunc negi_lang_map_set \
+	int map_ty, int map_i, int key_ty, int key_val, int val_ty, int val_val, \
+	local cell_i
+
+	cell_i = negi_lang_map_ref(map_ty, map_i, key_ty, key_val)
+	s_cell_tys(cell_i) = val_ty
+	s_cell_vals(cell_i) = val_val
+	return
+
+// -----------------------------------------------
 // 環境リスト
 // -----------------------------------------------
 
@@ -2670,6 +2802,15 @@
 	negi_lang_stack_push ty_array, array_i
 	return
 
+#deffunc negi_lang_eval_push_map int cmd_i, \
+	local map_i
+
+	assert s_cmd_kinds(cmd_i) == cmd_push_map
+
+	map_i = negi_lang_map_add()
+	negi_lang_stack_push ty_map, map_i
+	return
+
 #deffunc negi_lang_eval_push_closure int cmd_i, \
 	local fun_i, local env_i, local closure_i
 
@@ -2896,12 +3037,21 @@
 			negi_lang_stack_push ty_t, val_t
 			return
 		}
+		if ty == ty_map {
+			negi_lang_map_get ty, val_l, ty_r, val_r, ty_t, val_t
+			negi_lang_stack_push ty_t, val_t
+			return
+		}
 		negi_lang_eval_abort "type error", s_cmd_tok_is(cmd_i)
 		return
 	}
 	if op == op_index_ref {
 		if ty == ty_array && ty_r == ty_int {
 			negi_lang_stack_push ty_cell, negi_lang_array_ref(ty, val_l, val_r)
+			return
+		}
+		if ty == ty_map {
+			negi_lang_stack_push ty_cell, negi_lang_map_ref(ty, val_l, ty_r, val_r)
 			return
 		}
 		negi_lang_eval_abort "type error", s_cmd_tok_is(cmd_i)
@@ -2991,6 +3141,10 @@
 		}
 		if s_cmd_kinds(cmd_i) == cmd_push_array {
 			negi_lang_eval_push_array cmd_i
+			continue
+		}
+		if s_cmd_kinds(cmd_i) == cmd_push_map {
+			negi_lang_eval_push_map cmd_i
 			continue
 		}
 		if s_cmd_kinds(cmd_i) == cmd_push_closure {
@@ -3152,6 +3306,7 @@
 	negi_lang_frame_initialize
 	negi_lang_str_initialize
 	negi_lang_array_initialize
+	negi_lang_map_initialize
 	negi_lang_env_initialize
 	negi_lang_closure_initialize
 	negi_lang_extern_frame_initialize
