@@ -2498,12 +2498,11 @@
 	assert map_ty == ty_map
 	assert 0 <= map_i && map_i < s_map_len
 
-	// FIXME: 文字列でない値をマップのキーとして使えるようにする。
-	if key_ty != ty_str {
-		negi_lang_eval_abort "文字列でない値をマップのキーとする機能は未実装です", 0
+	// FIXME: 任意の値をキーとして使えるようにする
+	if key_ty != ty_int && key_ty != ty_str {
+		negi_lang_eval_abort "マップのキーは int/str に限ります", 0
 		return 0
 	}
-	assert 0 <= key_val && key_val < s_str_len
 
 	keys_i = s_map_keys_is(map_i)
 	vals_i = s_map_vals_is(map_i)
@@ -2515,11 +2514,7 @@
 
 	repeat len
 		negi_lang_array_get ty_array, keys_i, cnt, entry_key_ty, entry_key_val
-
-		if entry_key_ty != key_ty {
-			continue
-		}
-		if s_strs(entry_key_val) != s_strs(key_val) {
+		if negi_lang_equals(entry_key_ty, entry_key_val, key_ty, key_val) == false {
 			continue
 		}
 
@@ -2980,6 +2975,16 @@
 	s_pc = negi_lang_frame_pop()
 	return
 
+#defcfunc negi_lang_equals int ty, int l_val, int r_ty, int r_val
+
+	if ty != r_ty {
+		return false
+	}
+	if ty == ty_str {
+		return s_strs(l_val) == s_strs(r_val)
+	}
+	return l_val == r_val
+
 // スタック上の2つの値に演算を適用し、結果をスタックに置く。
 #deffunc negi_lang_eval_op int cmd_i, int op, \
 	local ty, local val_l, local ty_r, local val_r, local ty_t, local val_t
@@ -2994,15 +2999,7 @@
 			negi_lang_stack_push ty_int, false
 			return
 		}
-		if ty == ty_int {
-			negi_lang_stack_push ty_int, val_l == val_r
-			return
-		}
-		if ty == ty_str {
-			negi_lang_stack_push ty_int, s_strs(val_l) == s_strs(val_r)
-			return
-		}
-		negi_lang_eval_abort "type error", s_cmd_tok_is(cmd_i)
+		negi_lang_stack_push ty_int, negi_lang_equals(ty, val_l, ty_r, val_r)
 		return
 	}
 	assert op != op_ne
