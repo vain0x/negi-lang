@@ -2241,11 +2241,7 @@
 	local frame_i
 
 	frame_i = s_frame_len
-	if frame_i == length(s_frame_tok_is) {
-		s_frame_len *= 2
-		negi_lang_frame_push cmd_i, env_i, tok_i
-	}
-	s_frame_len = frame_i + 1
+	s_frame_len++
 
 	s_frame_cmd_is(frame_i) = cmd_i
 	s_frame_env_is(frame_i) = env_i
@@ -2371,18 +2367,13 @@
 	assert 0 <= len && len <= capacity
 
 	array_i = s_array_len
-	if s_array_len == length(s_array_lens) {
-		s_array_len *= 2
-		_ = negi_lang_array_add(0, 0)
-	}
-	s_array_len = array_i + 1
+	s_array_len++
 
 	negi_lang_heap_alloc capacity, cell_l, cell_r
 
 	s_array_lens(array_i) = len
 	s_array_cell_ls(array_i) = cell_l
 	s_array_cell_rs(array_i) = cell_r
-	s_array_len++
 	return array_i
 
 // 配列のキャパシティを new_len 以上にする。
@@ -2594,11 +2585,7 @@
 	local array_i, local array_len, local scope_i, local env_i
 
 	env_i = s_env_len
-	if s_env_len == length(s_env_parents) {
-		s_env_len *= 2
-		_ = negi_lang_env_add(parent_env_i, fun_i)
-	}
-	s_env_len = env_i + 1
+	s_env_len++
 
 	scope_i = s_fun_scope_is(fun_i)
 	array_len = s_scope_lens(scope_i)
