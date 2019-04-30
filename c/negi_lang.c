@@ -1960,6 +1960,15 @@ static Str *str_get(Ctx *ctx, int str_i) {
     return &ctx->strs.data[str_i];
 }
 
+static int str_slice_fun(Ctx *ctx, int str_i, int l, int r) {
+    Str *str = str_get(ctx, str_i);
+
+    l = l < 0 ? 0 : l;
+    r = r > str->len ? str->len : r;
+    char *data = str_slice(str->data, l, r);
+    return str_add(ctx, data);
+}
+
 // -----------------------------------------------
 // 配列リスト
 // -----------------------------------------------
@@ -2604,6 +2613,19 @@ static void eval(Ctx *ctx) {
 #define xarg_ty(i) (xarg_nth(i)->ty)
 #define xarg_val(i) (xarg_nth(i)->val)
 
+static void builtin_str_slice(Ctx *ctx, int argc) {
+    if (argc != 3 || xarg_ty(0) != ty_str || xarg_ty(1) != ty_int || xarg_ty(2) != ty_int) {
+        extern_frame_reject(ctx, "str_slice error");
+        return;
+    }
+
+    int str_i = xarg_val(0);
+    int l = xarg_val(1);
+    int r = xarg_val(2);
+    int str_slice_i = str_slice_fun(ctx, str_i, l, r);
+    extern_frame_resolve(ctx, (Cell){.ty = ty_str, .val = str_slice_i});
+}
+
 static void builtin_array_len(Ctx *ctx, int argc) {
     if (argc != 1 || xarg_ty(0) != ty_array) {
         extern_frame_reject(ctx, "array_len error");
@@ -2633,6 +2655,7 @@ static void builtin_array_pop(Ctx *ctx, int argc) {
 }
 
 static void extern_fun_builtin(Ctx *ctx) {
+    extern_fun_add(ctx, "str_slice", builtin_str_slice);
     extern_fun_add(ctx, "array_len", builtin_array_len);
     extern_fun_add(ctx, "array_push", builtin_array_push);
     extern_fun_add(ctx, "array_pop", builtin_array_pop);

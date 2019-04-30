@@ -522,3 +522,11 @@ src = """
     array_len(a)
 """
 exit = 2
+
+[[eval]]
+name = "str_slice"
+src = """
+    let s = "Hello, world!"
+    let t = str_slice(s, 7, 12);
+    t == "world" ? 0 : 1
+"""
