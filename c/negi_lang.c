@@ -2032,6 +2032,14 @@ static void array_push(Ctx *ctx, int array_i, Cell item) {
     array_set_item(ctx, array_i, index, item);
 }
 
+static void array_pop(Ctx *ctx, int array_i) {
+    Array *array = array_get(ctx, array_i);
+
+    if (array->len > 0) {
+        array->len--;
+    }
+}
+
 // -----------------------------------------------
 // 環境リスト
 // -----------------------------------------------
@@ -2615,9 +2623,19 @@ static void builtin_array_push(Ctx *ctx, int argc) {
     array_push(ctx, xarg_val(0), *xarg_nth(1));
 }
 
+static void builtin_array_pop(Ctx *ctx, int argc) {
+    if (argc != 1 || xarg_ty(0) != ty_array) {
+        extern_frame_reject(ctx, "array_pop error");
+        return;
+    }
+
+    array_pop(ctx, xarg_val(0));
+}
+
 static void extern_fun_builtin(Ctx *ctx) {
     extern_fun_add(ctx, "array_len", builtin_array_len);
     extern_fun_add(ctx, "array_push", builtin_array_push);
+    extern_fun_add(ctx, "array_pop", builtin_array_pop);
 }
 
 // ###############################################

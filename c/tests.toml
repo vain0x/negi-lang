@@ -513,3 +513,12 @@ src = """
     let a = 2; a += 1; a *= 14; a
 """
 exit = 42
+
+[[eval]]
+name = "array_pop"
+src = """
+    let a = [3, 1, 4];
+    array_pop(a);
+    array_len(a)
+"""
+exit = 2
