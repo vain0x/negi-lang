@@ -472,6 +472,9 @@ typedef struct Fun {
 
     // 関数の本体を指すラベル番号 (クロージャのみ)
     int label_i;
+
+    // 関数の本体を指すコマンド位置 (クロージャのみ、コード生成後のみ)
+    int cmd_i;
 } Fun;
 
 typedef struct VecFun {

@@ -1120,6 +1120,7 @@ static int fun_add_closure(Ctx *ctx, int scope_i, int label_i) {
     Fun *fun = fun_get(ctx, fun_i);
     fun->scope_i = scope_i;
     fun->label_i = label_i;
+    fun->cmd_i = -1;
 
     return fun_i;
 }
@@ -1642,6 +1643,7 @@ static void gen_exp(Ctx *ctx, int exp_i) {
 }
 
 static void gen_resolve_labels(Ctx *ctx) {
+    // ラベルが指すコマンド番号を計算する。
     for (int i = 0; i < ctx->cmds.len; i++) {
         const int cmd_i = i;
         Cmd *cmd = &ctx->cmds.data[cmd_i];
@@ -1651,10 +1653,17 @@ static void gen_resolve_labels(Ctx *ctx) {
         }
     }
 
+    // どのコマンド番号を指すのか不明なラベルがないことを検証する。
     for (int i = 0; i < ctx->labels.len; i++) {
         if (ctx->labels.data[i].cmd_i < 0) {
             failwith("Unresolved label");
         }
+    }
+
+    // 関数のジャンプ先をラベルではなくコマンドで指定する。
+    for (int fun_i = 0; fun_i < ctx->funs.len; fun_i++) {
+        Fun *fun = fun_get(ctx, fun_i);
+        fun->cmd_i = label_get(ctx, fun->label_i)->cmd_i;
     }
 }
 
@@ -2172,7 +2181,7 @@ static void eval_call(Ctx *ctx, int cmd_i) {
         Closure *closure = closure_get(ctx, closure_i);
         assert(fun_get(ctx, closure->fun_i)->kind == fun_kind_closure);
 
-        int body_label_i = fun_get(ctx, closure->fun_i)->label_i;
+        int body_cmd_i = fun_get(ctx, closure->fun_i)->cmd_i;
 
         // ローカル環境を生成する。
         int env_i = env_add(ctx, closure->env_i, closure->fun_i);
@@ -2183,7 +2192,7 @@ static void eval_call(Ctx *ctx, int cmd_i) {
         }
 
         frame_push(ctx, ctx->pc, env_i, cmd->tok_i);
-        ctx->pc = label_get(ctx, body_label_i)->cmd_i;
+        ctx->pc = body_cmd_i;
         return;
     }
 
