@@ -89,7 +89,7 @@ static void vec_grow(void **data, int len, int *capacity, int unit,
 // 汎用: 文字列
 // ###############################################
 
-static char *str_slice(const char *str, int l, int r) {
+static char *string_slice(const char *str, int l, int r) {
     assert(str != NULL && 0 <= l && l <= r);
 
     char *slice = (char *)mem_alloc(r - l + 1, sizeof(char));
@@ -99,7 +99,7 @@ static char *str_slice(const char *str, int l, int r) {
     return slice;
 }
 
-static char *str_format(const char *fmt, ...) {
+static char *string_format(const char *fmt, ...) {
     char buffer[4096];
 
     va_list ap;
@@ -108,10 +108,10 @@ static char *str_format(const char *fmt, ...) {
     va_end(ap);
 
     if (size < 0) {
-        failwith("FATAL ERROR str_format");
+        failwith("FATAL ERROR string_format");
     }
 
-    return str_slice(buffer, 0, size);
+    return string_slice(buffer, 0, size);
 }
 
 // ###############################################
@@ -194,12 +194,12 @@ static void src_initialize(Ctx *ctx, const char *src) {
 
     int len = strlen(src);
     ctx->src_len = len;
-    ctx->src = str_slice(src, 0, len);
+    ctx->src = string_slice(src, 0, len);
 }
 
 static const char *src_slice(Ctx *ctx, int l, int r) {
     assert(0 <= l && l <= r && r <= ctx->src_len);
-    return str_slice(ctx->src, l, r);
+    return string_slice(ctx->src, l, r);
 }
 
 // ###############################################
@@ -260,8 +260,9 @@ static const char *err_summary(Ctx *ctx) {
 
         const char *text = src_slice(ctx, err->src_l, err->src_r);
 
-        sb_append(summary, str_format("%d:%d..%d:%d", 1 + pos_l.y, 1 + pos_l.x,
-                                      1 + pos_r.y, 1 + pos_r.x));
+        sb_append(summary,
+                  string_format("%d:%d..%d:%d", 1 + pos_l.y, 1 + pos_l.x,
+                                1 + pos_r.y, 1 + pos_r.x));
         sb_append(summary, " near '");
         sb_append(summary, text);
         sb_append(summary, "'\n  ");
@@ -459,7 +460,7 @@ static void tokenize(Ctx *ctx) {
 
         // このとき、文字 c
         // はトークンとして不正なもの。エラーを表すトークンとして追加する。
-        trace(str_format("tok_err char = %c", c));
+        trace(string_format("tok_err char = %c", c));
         r++;
         tok_add(ctx, tok_err, l, r);
     }
@@ -1083,8 +1084,8 @@ static int parse_exp(Ctx *ctx, int *tok_i) {
 static void parse_eof(Ctx *ctx, int *tok_i) {
     Tok *tok = tok_get(ctx, *tok_i);
     if (tok->kind != tok_eof) {
-        err_add(ctx, str_format("この字句を解釈できませんでした。"), tok->src_l,
-                tok->src_r);
+        err_add(ctx, string_format("この字句を解釈できませんでした。"),
+                tok->src_l, tok->src_r);
     }
 }
 
@@ -1268,8 +1269,8 @@ static Fun *fun_get(Ctx *ctx, int fun_i) {
 }
 
 static int fun_add_closure(Ctx *ctx, int scope_i, int label_i) {
-    int fun_i =
-        fun_add(ctx, fun_kind_closure, str_format("<anonymous: %d>", label_i));
+    int fun_i = fun_add(ctx, fun_kind_closure,
+                        string_format("<anonymous: %d>", label_i));
 
     Fun *fun = fun_get(ctx, fun_i);
     fun->scope_i = scope_i;
@@ -1947,7 +1948,7 @@ static int str_add(Ctx *ctx, const char *str) {
     int str_i = ctx->strs.len++;
     int size = strlen(str);
     ctx->strs.data[str_i] = (Str){
-        .data = str_slice(str, 0, size),
+        .data = string_slice(str, 0, size),
         .len = size,
         .capacity = size,
     };
@@ -1965,7 +1966,7 @@ static int str_slice_fun(Ctx *ctx, int str_i, int l, int r) {
 
     l = l < 0 ? 0 : l;
     r = r > str->len ? str->len : r;
-    char *data = str_slice(str->data, l, r);
+    char *data = string_slice(str->data, l, r);
     return str_add(ctx, data);
 }
 
@@ -2614,7 +2615,8 @@ static void eval(Ctx *ctx) {
 #define xarg_val(i) (xarg_nth(i)->val)
 
 static void builtin_str_slice(Ctx *ctx, int argc) {
-    if (argc != 3 || xarg_ty(0) != ty_str || xarg_ty(1) != ty_int || xarg_ty(2) != ty_int) {
+    if (argc != 3 || xarg_ty(0) != ty_str || xarg_ty(1) != ty_int ||
+        xarg_ty(2) != ty_int) {
         extern_frame_reject(ctx, "str_slice error");
         return;
     }
@@ -2700,16 +2702,17 @@ static void dump_exp(Ctx *ctx, int exp_i, StringBuilder *out) {
     Exp *exp = exp_get(ctx, exp_i);
     switch (exp->kind) {
     case exp_err: {
-        sb_append(out, str_format("err '%s' \"%s\"", tok_text(ctx, exp->tok_i),
-                                  exp->str_value));
+        sb_append(out,
+                  string_format("err '%s' \"%s\"", tok_text(ctx, exp->tok_i),
+                                exp->str_value));
         break;
     }
     case exp_int: {
-        sb_append(out, str_format("%d", exp->int_value));
+        sb_append(out, string_format("%d", exp->int_value));
         break;
     }
     case exp_str: {
-        sb_append(out, str_format("\"%s\"", exp->str_value));
+        sb_append(out, string_format("\"%s\"", exp->str_value));
         break;
     }
     case exp_ident: {
@@ -2734,7 +2737,7 @@ static void dump_exp(Ctx *ctx, int exp_i, StringBuilder *out) {
         }
 
         if (exp->str_value != NULL) {
-            sb_append(out, str_format(" \"%s\"", exp->str_value));
+            sb_append(out, string_format(" \"%s\"", exp->str_value));
         }
         if (exp->exp_cond != exp_i_none) {
             sb_append(out, " ");
@@ -2783,22 +2786,23 @@ const char *negi_lang_gen_dump(const char *src) {
 
         const char *text = tok_text(ctx, cmd->tok_i);
         if (strcmp(text, "") != 0) {
-            sb_append(sb, str_format("// %s\n", text));
+            sb_append(sb, string_format("// %s\n", text));
         }
 
         switch (cmd->kind) {
         case cmd_err:
-            sb_append(sb, str_format("  err \"%s\"\n", cmd->str));
+            sb_append(sb, string_format("  err \"%s\"\n", cmd->str));
             break;
         case cmd_label:
-            sb_append(sb, str_format("%d:\n", cmd->x));
+            sb_append(sb, string_format("%d:\n", cmd->x));
             break;
         default:
             if (cmd->str != NULL) {
-                sb_append(sb, str_format("  %d \"%s\"\n", cmd->kind, cmd->str));
+                sb_append(sb,
+                          string_format("  %d \"%s\"\n", cmd->kind, cmd->str));
                 break;
             }
-            sb_append(sb, str_format("  %d %d\n", cmd->kind, cmd->x));
+            sb_append(sb, string_format("  %d %d\n", cmd->kind, cmd->x));
             break;
         }
     }
