@@ -823,7 +823,7 @@ static int parse_while(Ctx *ctx, int *tok_i) {
     assert(tok_kind(ctx, *tok_i) == tok_while);
     int while_tok_i = bump(tok_i);
 
-    int cond_exp_i = parse_atom(ctx, tok_i);
+    int cond_exp_i = parse_term(ctx, tok_i);
 
     if (tok_kind(ctx, *tok_i) != tok_brace_l) {
         return exp_add_err(ctx, "波カッコが必要です。", *tok_i);
