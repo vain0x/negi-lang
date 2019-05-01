@@ -154,6 +154,10 @@ typedef enum OpKind {
     op_set_div,
     // %=
     op_set_mod,
+    // ||
+    op_log_or,
+    // &&
+    op_log_and,
     // == (equal)
     op_eq,
     // != (not equal)
@@ -194,6 +198,8 @@ typedef enum OpKind {
 
 typedef enum OpLevel {
     op_level_set,
+    op_level_log_or,
+    op_level_log_and,
     // comparison
     op_level_cmp,
     // additive
@@ -674,6 +680,8 @@ struct NegiLangContext {
     SubExps subexps;
     Exps exps;
     int exp_i_root;
+    int exp_i_true;
+    int exp_i_false;
 
     VecLabel labels;
     VecScope scopes;

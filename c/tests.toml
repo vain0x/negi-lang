@@ -379,6 +379,21 @@ src = """
 exit = 1
 
 [[eval]]
+name = "論理 OR が使える"
+src = """
+    assert(0 == 0 || 0 / 0 == 0);
+    assert(0 != 0 || 0 == 0);
+    0
+"""
+
+# [[eval]]
+# name = "論理 AND が使える"
+# src = """
+#     assert((0 != 0 && 0 / 0 == 0) == 0);
+#     0
+# """
+
+[[eval]]
 name = "while が使える"
 src = """
     let i = 0;

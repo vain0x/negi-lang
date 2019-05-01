@@ -475,14 +475,15 @@ typedef struct OpLevelOpKindOpTextTuple {
 } OpLevelOpKindOpTextTuple;
 
 static const OpLevelOpKindOpTextTuple op_table[] = {
-    {op_level_set, op_set, "="},      {op_level_set, op_set_add, "+="},
-    {op_level_set, op_set_sub, "-="}, {op_level_set, op_set_mul, "*="},
-    {op_level_set, op_set_div, "/="}, {op_level_set, op_set_mod, "%="},
-    {op_level_cmp, op_eq, "=="},      {op_level_cmp, op_ne, "!="},
-    {op_level_cmp, op_lt, "<"},       {op_level_cmp, op_le, "<="},
-    {op_level_cmp, op_gt, ">"},       {op_level_cmp, op_ge, ">="},
-    {op_level_add, op_add, "+"},      {op_level_add, op_sub, "-"},
-    {op_level_mul, op_mul, "*"},      {op_level_mul, op_div, "/"},
+    {op_level_set, op_set, "="},        {op_level_set, op_set_add, "+="},
+    {op_level_set, op_set_sub, "-="},   {op_level_set, op_set_mul, "*="},
+    {op_level_set, op_set_div, "/="},   {op_level_set, op_set_mod, "%="},
+    {op_level_log_or, op_log_or, "||"}, {op_level_log_and, op_log_and, "&&"},
+    {op_level_cmp, op_eq, "=="},        {op_level_cmp, op_ne, "!="},
+    {op_level_cmp, op_lt, "<"},         {op_level_cmp, op_le, "<="},
+    {op_level_cmp, op_gt, ">"},         {op_level_cmp, op_ge, ">="},
+    {op_level_add, op_add, "+"},        {op_level_add, op_sub, "-"},
+    {op_level_mul, op_mul, "*"},        {op_level_mul, op_div, "/"},
     {op_level_mul, op_mod, "%"},
 };
 
@@ -756,7 +757,7 @@ static int parse_bin_l(Ctx *ctx, int *tok_i, OpLevel op_level) {
 }
 
 static int parse_bin_set(Ctx *ctx, int *tok_i) {
-    int exp_l = parse_bin_l(ctx, tok_i, op_level_cmp);
+    int exp_l = parse_bin_l(ctx, tok_i, op_level_log_or);
 
     if (tok_kind(ctx, *tok_i) == tok_op) {
         int op_tok_i = *tok_i;
@@ -960,6 +961,10 @@ static void parse_eof(Ctx *ctx, int *tok_i) {
 static void parse(Ctx *ctx) {
     int exp_i = exp_add_err(ctx, "NOT AN EXPRESSION", 0);
     assert(exp_i == exp_i_none);
+
+    int fake_tok_i = 0;
+    ctx->exp_i_true = exp_add_int(ctx, exp_int, 1, fake_tok_i);
+    ctx->exp_i_false = exp_add_int(ctx, exp_int, 0, fake_tok_i);
 
     int tok_i = 0;
     ctx->exp_i_root = parse_semi(ctx, &tok_i);
@@ -1329,6 +1334,10 @@ static void gen_exp(Ctx *ctx, int exp_i);
 
 static void gen_lval(Ctx *ctx, int exp_i);
 
+static void gen_log_or(Ctx *ctx, int exp_i);
+
+static void gen_log_and(Ctx *ctx, int exp_i);
+
 static void gen_ident(Ctx *ctx, int exp_i, bool lval) {
     defexp;
     assert(exp->kind == exp_ident);
@@ -1438,6 +1447,14 @@ static void gen_op(Ctx *ctx, int exp_i, bool lval) {
         gen_set_op(ctx, exp_i);
         return;
     }
+    if (op == op_log_or) {
+        gen_log_or(ctx, exp_i);
+        return;
+    }
+    if (op == op_log_and) {
+        gen_log_and(ctx, exp_i);
+        return;
+    }
 
     gen_exp(ctx, exp->exp_l);
     gen_exp(ctx, exp->exp_r);
@@ -1535,28 +1552,43 @@ static void gen_let(Ctx *ctx, int exp_i) {
     cmd_add(ctx, cmd_cell_set, exp->tok_i);
 }
 
-static void gen_if(Ctx *ctx, int exp_i) {
-    defexp;
-    assert(exp->kind == exp_if);
-    int tok_i = exp->tok_i;
-
+static void do_gen_if(Ctx *ctx, int cond_exp_i, int body_exp_i, int alt_exp_i, int tok_i) {
     int else_label_i = label_add(ctx);
     int end_label_i = label_add(ctx);
 
     // do cond; if false, goto l_else
-    gen_exp(ctx, exp->exp_cond);
+    gen_exp(ctx, cond_exp_i);
     cmd_add_jump_unless(ctx, else_label_i, tok_i);
 
     // do then_clause; goto l_end
-    gen_exp(ctx, exp->exp_l);
+    gen_exp(ctx, body_exp_i);
     cmd_add_goto(ctx, end_label_i, tok_i);
 
     // l_else: do else_clause
     cmd_add_label(ctx, else_label_i, tok_i);
-    gen_exp(ctx, exp->exp_r);
+    gen_exp(ctx, alt_exp_i);
 
     // l_end:
     cmd_add_label(ctx, end_label_i, tok_i);
+}
+
+static void gen_if(Ctx *ctx, int exp_i) {
+    defexp;
+    assert(exp->kind == exp_if);
+
+    do_gen_if(ctx, exp->exp_cond, exp->exp_l, exp->exp_r, exp->tok_i);
+}
+
+static void gen_log_or(Ctx *ctx, int exp_i) {
+    defexp;
+
+    do_gen_if(ctx, exp->exp_l, ctx->exp_i_true, exp->exp_r, exp->tok_i);
+}
+
+static void gen_log_and(Ctx *ctx, int exp_i) {
+    defexp;
+
+    do_gen_if(ctx, exp->exp_l, exp->exp_r, ctx->exp_i_false, exp->tok_i);
 }
 
 // スタックに何らかの値をちょうど1つ積んだ状態で終了するように気をつける。
