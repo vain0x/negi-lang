@@ -543,3 +543,15 @@ src = """
     array_len(a)
 """
 exit = 2
+
+[[eval]]
+name = "assert"
+src = """
+    assert(0 == 0);
+    assert(0 != 0);
+"""
+err = """
+    2:11..2:12 near '('
+        assertion violated
+"""
+exit = 1

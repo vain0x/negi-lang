@@ -2519,12 +2519,26 @@ static void builtin_array_pop(Ctx *ctx, int argc) {
     array_pop(ctx, xarg_val(0));
 }
 
+static void builtin_assert(Ctx *ctx, int argc) {
+    if (argc != 1 || xarg_ty(0) != ty_int) {
+        extern_frame_reject(ctx, "assert error");
+        return;
+    }
+
+    int ok = xarg_val(0);
+    if (!ok) {
+        extern_frame_reject(ctx, "assertion violated");
+        return;
+    }
+}
+
 static void extern_fun_builtin(Ctx *ctx) {
     extern_fun_add(ctx, "val_type", builtin_val_type);
     extern_fun_add(ctx, "str_slice", builtin_str_slice);
     extern_fun_add(ctx, "array_len", builtin_array_len);
     extern_fun_add(ctx, "array_push", builtin_array_push);
     extern_fun_add(ctx, "array_pop", builtin_array_pop);
+    extern_fun_add(ctx, "assert", builtin_assert);
 }
 
 // ###############################################
