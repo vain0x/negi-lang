@@ -24,6 +24,8 @@ typedef enum TokKind {
     // 整数を表すトークン
     tok_int,
 
+    tok_char,
+
     // 文字列を表すトークン
     tok_str,
 

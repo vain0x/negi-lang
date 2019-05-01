@@ -226,21 +226,27 @@ static void tokenize(Ctx *ctx) {
             continue;
         }
 
-        if (c == '"') {
+        if (c == '"' || c == '\'') {
+            char quote = c;
             r++;
 
             while (r < ctx->src_len) {
                 char c = ctx->src[r];
 
-                if (c == '"' || c == '\r' || c == '\n') {
+                if (c == quote || c == '\r' || c == '\n') {
                     r++;
                     break;
+                }
+                if (c == '\\' && ctx->src[r + 1] != '\0') {
+                    r += 2;
+                    continue;
                 }
 
                 r++;
             }
 
-            tok_add(ctx, tok_str, l, r);
+            TokKind kind = quote == '"' ? tok_str : tok_char;
+            tok_add(ctx, kind, l, r);
             continue;
         }
 
@@ -318,9 +324,9 @@ static int bump(int *p) { return (*p)++; }
 
 // トークンが項の始まりを表すか否か。
 static bool tok_leads_term(enum TokKind kind) {
-    return kind == tok_int || kind == tok_str || kind == tok_ident ||
-           kind == tok_paren_l || kind == tok_bracket_l || kind == tok_fun ||
-           kind == tok_op;
+    return kind == tok_int || kind == tok_char || kind == tok_str ||
+           kind == tok_ident || kind == tok_paren_l || kind == tok_bracket_l ||
+           kind == tok_fun || kind == tok_op;
 }
 
 // トークンが文の始まりを表すか否か。
@@ -490,6 +496,39 @@ static int parse_term(Ctx *ctx, int *tok_i);
 
 static int parse_exp(Ctx *ctx, int *tok_i);
 
+static char unescape(const char *text) {
+    if (text[0] == '\\') {
+        if (text[1] == 'n') {
+            return '\n';
+        }
+        if (text[1] == 'r') {
+            return '\r';
+        }
+        if (text[1] == 't') {
+            return '\t';
+        }
+        if (text[1] == '0') {
+            return 0;
+        }
+        return text[1];
+    }
+    return text[0];
+}
+
+static int parse_char(Ctx *ctx, int *tok_i) {
+    assert(tok_kind(ctx, *tok_i) == tok_char);
+
+    Tok *tok = tok_get(ctx, *tok_i);
+
+    char c = '\0';
+    if (tok->src_l + 1 < tok->src_r - 1) {
+        const char *text = src_slice(ctx, tok->src_l + 1, tok->src_r - 1);
+        c = unescape(text);
+    }
+
+    return exp_add_int(ctx, exp_int, (int)c, bump(tok_i));
+}
+
 static int parse_str(Ctx *ctx, int *tok_i) {
     assert(tok_kind(ctx, *tok_i) == tok_str);
 
@@ -584,6 +623,8 @@ static int parse_atom(Ctx *ctx, int *tok_i) {
         int value = atol(tok_text(ctx, *tok_i));
         return exp_add_int(ctx, exp_int, value, bump(tok_i));
     }
+    case tok_char:
+        return parse_char(ctx, tok_i);
     case tok_str:
         return parse_str(ctx, tok_i);
     case tok_ident: {
@@ -1072,8 +1113,8 @@ static int local_add_var(Ctx *ctx, const char *ident, int tok_i) {
 // ローカル変数を探索する。
 // local_i: 発見されたローカル番号
 // level: 発見されたローカル変数が、何個外側の関数スコープにあるのか
-static bool local_find_var(Ctx *ctx, const char *ident, int tok_i,
-                           int *local_i, int *level) {
+static bool local_find_var(Ctx *ctx, const char *ident, int tok_i, int *local_i,
+                           int *level) {
     int scope_i = ctx->scope_i_current;
     *level = 0;
     while (true) {
@@ -2547,7 +2588,7 @@ static void builtin_assert(Ctx *ctx, int argc) {
     }
 }
 
-static void builtin_stdin_to_str(Ctx* ctx, int argc) {
+static void builtin_stdin_to_str(Ctx *ctx, int argc) {
     if (argc != 0) {
         extern_frame_reject(ctx, "stdin_to_str error");
         return;

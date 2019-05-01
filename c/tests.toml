@@ -104,7 +104,7 @@ name = "文字列の加算と比較"
 src = """
     "hello, " + "world" == "hello, world"
 """
-exit =  1
+exit = 1
 
 [[eval]]
 name = "文字列から文字をとる"
@@ -119,6 +119,25 @@ src = """
     "ab"[2]
 """
 exit = 0
+
+[[eval]]
+name = "文字リテラルが使える"
+src = """
+    assert("a"[0] == 'a');
+    0
+"""
+
+[[eval]]
+name = "文字リテラルでエスケープシーケンスが使える"
+src = '''
+    assert(' ' == 32);
+    assert('\n' == 10);
+    assert('\r' == 13);
+    assert('\t' == 9);
+    assert('\0' == 0);
+    assert('\\' == "\\"[0]);
+    0
+'''
 
 [[eval]]
 name = "配列の要素を取得できる"
