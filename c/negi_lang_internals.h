@@ -242,9 +242,12 @@ typedef enum CmdKind {
     // 外部関数をプッシュする
     cmd_push_extern,
 
-    // ローカル変数の参照セルをプッシュ
+    // 実行環境をプッシュする
+    // x: 何番目の親環境か (現環境を 0 とする)
+    cmd_push_env,
+
+    // スタックの一番上にある実行環境に含まれるローカル変数の参照セルをプッシュ
     // x: 何番目の変数か
-    // y: 変数が属するスコープ番号
     cmd_local_var,
 
     // スタックの一番上にある参照セルの値を取得する
@@ -294,6 +297,8 @@ typedef enum TyKind {
 
     // 外部関数。値は s_extern_funs の要素番号。
     ty_extern,
+
+    ty_env,
 
     // 参照セル。値は s_cells の要素番号。
     ty_cell,
@@ -534,7 +539,6 @@ typedef struct VecLoop {
 typedef struct Cmd {
     CmdKind kind;
     int x;
-    int scope_i;
     int tok_i;
 } Cmd;
 

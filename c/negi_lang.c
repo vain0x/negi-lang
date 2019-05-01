@@ -1069,9 +1069,13 @@ static int local_add_var(Ctx *ctx, const char *ident, int tok_i) {
     return local_add(ctx, ident, ctx->scope_i_current, tok_i);
 }
 
+// ローカル変数を探索する。
+// local_i: 発見されたローカル番号
+// level: 発見されたローカル変数が、何個外側の関数スコープにあるのか
 static bool local_find_var(Ctx *ctx, const char *ident, int tok_i,
-                           int *local_i) {
+                           int *local_i, int *level) {
     int scope_i = ctx->scope_i_current;
+    *level = 0;
     while (true) {
         for (int i = 0; i < ctx->locals.len; i++) {
             Local *local = local_get(ctx, i);
@@ -1091,6 +1095,7 @@ static bool local_find_var(Ctx *ctx, const char *ident, int tok_i,
             return false;
         }
         scope_i = scope->parent;
+        (*level)++;
     }
 }
 
@@ -1237,13 +1242,9 @@ static void cmd_add_closure(Ctx *ctx, int fun_i, int tok_i) {
     cmd_add_int(ctx, cmd_push_closure, fun_i, tok_i);
 }
 
-static void cmd_add_local_var(Ctx *ctx, int index, int scope_i, int tok_i) {
-    cmd_do_add(ctx, (Cmd){
-                        .kind = cmd_local_var,
-                        .x = index,
-                        .scope_i = scope_i,
-                        .tok_i = tok_i,
-                    });
+static void cmd_add_local_var(Ctx *ctx, int index, int level, int tok_i) {
+    cmd_add_int(ctx, cmd_push_env, level, tok_i);
+    cmd_add_int(ctx, cmd_local_var, index, tok_i);
 }
 
 static void cmd_add_op(Ctx *ctx, OpKind op, int tok_i) {
@@ -1293,10 +1294,10 @@ static void gen_ident(Ctx *ctx, int exp_i, bool lval) {
     const char *name = exp->str_value;
     int tok_i = exp->tok_i;
 
-    int local_i;
-    if (local_find_var(ctx, name, tok_i, &local_i)) {
+    int local_i, level;
+    if (local_find_var(ctx, name, tok_i, &local_i, &level)) {
         Local *local = local_get(ctx, local_i);
-        cmd_add_local_var(ctx, local->index, local->scope_i, tok_i);
+        cmd_add_local_var(ctx, local->index, level, tok_i);
 
         if (!lval) {
             cmd_add(ctx, cmd_cell_get, tok_i);
@@ -1484,10 +1485,11 @@ static void gen_let(Ctx *ctx, int exp_i) {
 
     int local_i = local_add_var(ctx, ident, ident_tok_i);
     Local *local = local_get(ctx, local_i);
+    int level = 0;
 
     // 右辺の値、左辺の参照セル、という順番でスタックに積む。
     // 代入式とは逆。swap が必要になる。
-    cmd_add_local_var(ctx, local->index, local->scope_i, exp->tok_i);
+    cmd_add_local_var(ctx, local->index, level, exp->tok_i);
     cmd_add(ctx, cmd_swap, exp->tok_i);
     cmd_add(ctx, cmd_cell_set, exp->tok_i);
 }
@@ -1868,6 +1870,7 @@ static void array_reserve(Ctx *ctx, int array_i, int new_len) {
            (new_range.cell_r - new_range.cell_l) * sizeof(Cell));
 }
 
+// 配列の index 番目の要素の参照セル番号を取得する。
 static int array_ref(Ctx *ctx, int array_i, int index) {
     Array *array = array_get(ctx, array_i);
 
@@ -1930,17 +1933,6 @@ static int env_add(Ctx *ctx, int parent_env_i, int fun_i) {
 static Env *env_get(Ctx *ctx, int env_i) {
     assert(0 <= env_i && env_i < ctx->envs.len);
     return &ctx->envs.data[env_i];
-}
-
-static int env_find(Ctx *ctx, int source_env_i, int index, int scope_i) {
-    int env_i = source_env_i;
-    while (env_get(ctx, env_i)->scope_i != scope_i) {
-        assert(env_i != env_get(ctx, env_i)->parent);
-        assert(env_get(ctx, env_i)->parent >= 0);
-        env_i = env_get(ctx, env_i)->parent;
-    }
-
-    return array_ref(ctx, env_get(ctx, env_i)->array_i, index);
 }
 
 // -----------------------------------------------
@@ -2077,13 +2069,31 @@ static void eval_push_extern(Ctx *ctx, int cmd_i) {
     stack_push(ctx, (Cell){.ty = ty_extern, .val = extern_fun_i});
 }
 
+static void eval_push_env(Ctx *ctx, int cmd_i) {
+    defcmd;
+    assert(cmd->kind == cmd_push_env);
+
+    int level = cmd->x;
+    int env_i = frame_current(ctx)->env_i;
+    while (level > 0) {
+        env_i = env_get(ctx, env_i)->parent;
+        level--;
+    }
+    assert(env_i >= 0);
+
+    stack_push(ctx, (Cell){.ty = ty_env, .val = env_i});
+}
+
 static void eval_local_var(Ctx *ctx, int cmd_i) {
     defcmd;
     assert(cmd->kind == cmd_local_var);
 
+    Cell env_cell = stack_pop(ctx);
+    assert(env_cell.ty == ty_env);
+    int env_i = env_cell.val;
+
     int index = cmd->x;
-    int env_i = frame_current(ctx)->env_i;
-    int cell_i = env_find(ctx, env_i, index, cmd->scope_i);
+    int cell_i = array_ref(ctx, env_get(ctx, env_i)->array_i, index);
     stack_push(ctx, (Cell){.ty = ty_cell, .val = cell_i});
 }
 
@@ -2394,6 +2404,9 @@ static void eval_cmds(Ctx *ctx) {
             continue;
         case cmd_push_extern:
             eval_push_extern(ctx, cmd_i);
+            continue;
+        case cmd_push_env:
+            eval_push_env(ctx, cmd_i);
             continue;
         case cmd_local_var:
             eval_local_var(ctx, cmd_i);
