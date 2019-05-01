@@ -209,6 +209,14 @@ static void tokenize(Ctx *ctx) {
             continue;
         }
 
+        // コメントを無視する。
+        if (c == '/' && ctx->src[l + 1] == '/') {
+            while (ctx->src[r] != '\n') {
+                r += 1;
+            }
+            continue;
+        }
+
         if (is_digit(c)) {
             while (r < ctx->src_len && is_digit(ctx->src[r])) {
                 r++;

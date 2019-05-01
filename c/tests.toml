@@ -16,10 +16,18 @@ exit = 42
 name = "セミコロンが使える"
 src = ";;; 1 ; 2 ;;; 3"
 exit = 3
+
 [[eval]]
 name = "末尾のセミコロンは無視される"
 src = "1 ;;;"
 exit = 1
+
+[[eval]]
+name = "コメントを書ける"
+src = """
+    // this is comment
+    0 // comment
+"""
 
 [[eval]]
 name = "加算ができる"
