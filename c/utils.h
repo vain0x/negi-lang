@@ -43,9 +43,10 @@ extern void vec_grow(void **data, int len, int *capacity, int unit, int grow_siz
 extern char *string_slice(const char *str, int l, int r);
 extern char *string_format(const char *fmt, ...);
 
-extern void *sb_new();
+extern StringBuilder *sb_new();
 extern void sb_reserve(StringBuilder *sb, int new_capacity);
 extern void sb_append(StringBuilder *sb, const char *src);
+extern void sb_format(StringBuilder *sb, const char *fmt, ...);
 extern const char *sb_to_str(const StringBuilder *sb);
 
 extern VecInt *vec_int_new();

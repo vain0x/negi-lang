@@ -145,7 +145,22 @@ void sb_append(StringBuilder *sb, const char *src) {
     sb->size += src_size;
 }
 
-void *sb_new() {
+void sb_format(StringBuilder *sb, const char *fmt, ...) {
+    char buffer[4096];
+
+    va_list ap;
+    va_start(ap, fmt);
+    int size = vsnprintf(buffer, sizeof(buffer), fmt, ap);
+    va_end(ap);
+
+    if (size < 0) {
+        failwith("FATAL ERROR sb_format");
+    }
+
+    sb_append(sb, buffer);
+}
+
+StringBuilder *sb_new() {
     StringBuilder *sb = mem_alloc(1, sizeof(StringBuilder));
     *sb = (StringBuilder){
         .data = "",
