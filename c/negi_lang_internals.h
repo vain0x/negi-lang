@@ -6,27 +6,6 @@
 typedef struct NegiLangContext Ctx;
 
 // ###############################################
-// 汎用
-// ###############################################
-
-typedef struct Vec {
-    void *data;
-    int size;
-    int capacity;
-} Vec;
-
-typedef struct StringBuilder {
-    char *data;
-    // Excluding the final zero byte.
-    int size;
-    int capacity;
-} StringBuilder;
-
-typedef struct TextPos {
-    int y, x;
-} TextPos;
-
-// ###############################################
 // 定数
 // ###############################################
 
@@ -727,32 +706,5 @@ extern const char *negi_lang_parse_dump(const char *src);
 extern const char *negi_lang_gen_dump(const char *src);
 extern void negi_lang_eval_for_testing(const char *src, int *exit_code,
                                        const char **output);
-
-// ###############################################
-// デバッグ用
-// ###############################################
-
-// -----------------------------------------------
-// 致命的なエラー
-// -----------------------------------------------
-
-// ネギ言語処理系のバグに起因するエラーを報告して、異常終了する。
-// 入力されたプログラムの問題は、これではなく以下にある「エラー」の仕組みを使って報告する。
-#define failwith(message) do_failwith(__FILE__, __LINE__, message)
-
-#define unimplemented() failwith("unimplemented")
-
-// -----------------------------------------------
-// デバッグ用
-// -----------------------------------------------
-
-#ifdef _DEBUG
-#define trace(X) do_trace(__FILE__, __LINE__, X)
-#define debug(A) //
-
-#else
-#define trace(A) //
-#define debug(A) //
-#endif
 
 #endif
