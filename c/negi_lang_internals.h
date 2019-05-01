@@ -704,13 +704,14 @@ struct NegiLangContext {
     // ガベージコレクションを実行するか。
     bool does_gc;
     int exit_code;
+
+    NegiLangExternals *externals;
 };
 
 extern void negi_lang_test_util();
 extern const char *negi_lang_tokenize_dump(const char *src);
 extern const char *negi_lang_parse_dump(const char *src);
 extern const char *negi_lang_gen_dump(const char *src);
-extern void negi_lang_eval_for_testing(const char *src, int *exit_code,
-                                       const char **output);
+extern void negi_lang_eval_for_testing(NegiLangExternals *externals);
 
 #endif

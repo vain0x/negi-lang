@@ -19,6 +19,10 @@ typedef struct EvalTestCase {
 static EvalTestCase eval_tests[1024];
 static int eval_test_len;
 
+static const char *stdin_buffer = "";
+
+static const char *stdin_to_str() { return stdin_buffer; }
+
 static bool str_roughly_equals(const char *s, const char *t) {
     int si = 0;
     int ti = 0;
@@ -167,7 +171,13 @@ int main() {
         bool ok = true;
         int exit;
         const char *err;
-        negi_lang_eval_for_testing(eval->src, &exit, &err);
+        NegiLangExternals externals = (NegiLangExternals){
+            .src = eval->src,
+            .exit_code = &exit,
+            .output = &err,
+            .stdin_to_str = stdin_to_str,
+        };
+        negi_lang_eval_for_testing(&externals);
 
         if (exit != eval->exit) {
             eval_test_print_heading(i, ok);
@@ -191,6 +201,30 @@ int main() {
             pass_count++;
         } else {
             fail_count++;
+        }
+    }
+
+    {
+        const char *negi = file_read_all("negi_lang.negi");
+
+        int exit;
+        const char *err;
+        NegiLangExternals externals = (NegiLangExternals){
+            .src = negi,
+            .exit_code = &exit,
+            .output = &err,
+            .stdin_to_str = stdin_to_str,
+        };
+
+        stdin_buffer = "0";
+        negi_lang_eval_for_testing(&externals);
+
+        if (exit == 0) {
+            pass_count++;
+        } else {
+            fail_count++;
+
+            fprintf(stderr, "Exit = %d\nError = %s\n", exit, err);
         }
     }
 

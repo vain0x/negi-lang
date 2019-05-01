@@ -5,4 +5,12 @@
 
 struct NegiLangContext;
 
+typedef struct NegiLangExternals {
+    const char *src;
+    const char **output;
+    int *exit_code;
+
+    const char *(*stdin_to_str)();
+} NegiLangExternals;
+
 #endif

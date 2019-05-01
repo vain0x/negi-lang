@@ -1,0 +1,3 @@
+let src = stdin_to_str();
+assert(src == "0");
+0

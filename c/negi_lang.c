@@ -2532,6 +2532,16 @@ static void builtin_assert(Ctx *ctx, int argc) {
     }
 }
 
+static void builtin_stdin_to_str(Ctx* ctx, int argc) {
+    if (argc != 0) {
+        extern_frame_reject(ctx, "stdin_to_str error");
+        return;
+    }
+
+    int str_i = str_add(ctx, ctx->externals->stdin_to_str());
+    extern_frame_resolve(ctx, (Cell){.ty = ty_str, .val = str_i});
+}
+
 static void extern_fun_builtin(Ctx *ctx) {
     extern_fun_add(ctx, "val_type", builtin_val_type);
     extern_fun_add(ctx, "str_slice", builtin_str_slice);
@@ -2539,6 +2549,7 @@ static void extern_fun_builtin(Ctx *ctx) {
     extern_fun_add(ctx, "array_push", builtin_array_push);
     extern_fun_add(ctx, "array_pop", builtin_array_pop);
     extern_fun_add(ctx, "assert", builtin_assert);
+    extern_fun_add(ctx, "stdin_to_str", builtin_stdin_to_str);
 }
 
 // ###############################################
@@ -2691,15 +2702,15 @@ const char *negi_lang_gen_dump(const char *src) {
     return sb_to_str(sb);
 }
 
-void negi_lang_eval_for_testing(const char *src, int *exit_code,
-                                const char **output) {
-    Ctx *ctx = ctx_new(src);
+void negi_lang_eval_for_testing(NegiLangExternals *externals) {
+    Ctx *ctx = ctx_new(externals->src);
+    ctx->externals = externals;
 
     tokenize(ctx);
     parse(ctx);
     gen(ctx);
     eval(ctx);
 
-    *exit_code = ctx->exit_code;
-    *output = err_summary(ctx);
+    *externals->exit_code = ctx->exit_code;
+    *externals->output = err_summary(ctx);
 }
