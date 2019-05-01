@@ -4,6 +4,7 @@
 #include <stdbool.h>
 
 typedef struct NegiLangContext Ctx;
+typedef struct StringBuilder StringBuilder;
 
 // ###############################################
 // 定数
@@ -530,7 +531,6 @@ typedef struct VecLoop {
 typedef struct Cmd {
     CmdKind kind;
     int x;
-    const char *str;
     int scope_i;
     int tok_i;
 } Cmd;
@@ -652,6 +652,9 @@ struct NegiLangContext {
     // ソースコード。
     const char *src;
     int src_len;
+
+    // データ領域。文字列定数の内容を改行区切りで羅列したもの。
+    StringBuilder *data;
 
     Errs errs;
 

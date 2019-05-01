@@ -928,6 +928,26 @@ static void parse(Ctx *ctx) {
 // ###############################################
 
 // -----------------------------------------------
+// データ領域
+// -----------------------------------------------
+
+static int data_new(Ctx *ctx, const char *message) {
+    assert(strstr(message, "\n\n") == NULL);
+
+    int data_i = ctx->data->size;
+    sb_append(ctx->data, message);
+    sb_append(ctx->data, "\n\n");
+
+    return data_i;
+}
+
+static const char *data_get(Ctx *ctx, int data_i) {
+    char *p = ctx->data->data + data_i;
+    char *q = strstr(p, "\n\n");
+    return string_slice(p, 0, q - p);
+}
+
+// -----------------------------------------------
 // 演算子
 // -----------------------------------------------
 
@@ -1184,7 +1204,7 @@ static Cmd *cmd_get(Ctx *ctx, int cmd_i) {
 static void cmd_add_err(Ctx *ctx, const char *message, int tok_i) {
     cmd_do_add(ctx, (Cmd){
                         .kind = cmd_err,
-                        .str = message,
+                        .x = data_new(ctx, message),
                         .tok_i = tok_i,
                     });
 }
@@ -1200,7 +1220,7 @@ static void cmd_add_int(Ctx *ctx, CmdKind kind, int value, int tok_i) {
 static void cmd_add_str(Ctx *ctx, CmdKind kind, const char *str, int tok_i) {
     cmd_do_add(ctx, (Cmd){
                         .kind = kind,
-                        .str = str,
+                        .x = data_new(ctx, str),
                         .tok_i = tok_i,
                     });
 }
@@ -2002,7 +2022,7 @@ static void eval_err(Ctx *ctx, int cmd_i) {
     defcmd;
     assert(cmd->kind == cmd_err);
 
-    eval_abort(ctx, cmd->str, cmd->tok_i);
+    eval_abort(ctx, data_get(ctx, cmd->x), cmd->tok_i);
 }
 
 static void eval_push_int(Ctx *ctx, int cmd_i) {
@@ -2015,7 +2035,7 @@ static void eval_push_str(Ctx *ctx, int cmd_i) {
     defcmd;
     assert(cmd->kind == cmd_push_str);
 
-    int str_i = str_add(ctx, cmd->str);
+    int str_i = str_add(ctx, data_get(ctx, cmd->x));
     stack_push(ctx, (Cell){.ty = ty_str, .val = str_i});
 }
 
@@ -2497,6 +2517,8 @@ Ctx *ctx_new(const char *src) {
 
     *ctx = (Ctx){};
 
+    ctx->data = sb_new();
+
     extern_fun_builtin(ctx);
     src_initialize(ctx, src);
     return ctx;
@@ -2616,19 +2638,21 @@ const char *negi_lang_gen_dump(const char *src) {
 
         switch (cmd->kind) {
         case cmd_err:
-            sb_append(sb, string_format("  err \"%s\"\n", cmd->str));
+            sb_append(sb,
+                      string_format("  err \"%s\"\n", data_get(ctx, cmd->x)));
             break;
         case cmd_label:
             sb_append(sb, string_format("%d:\n", cmd->x));
             break;
-        default:
-            if (cmd->str != NULL) {
-                sb_append(sb,
-                          string_format("  %d \"%s\"\n", cmd->kind, cmd->str));
+        default: {
+            if (0 <= cmd->x && cmd->x < ctx->data->size - 2) {
+                sb_append(sb, string_format("  %d %d (\"%s\")\n", cmd->kind,
+                                            cmd->x, data_get(ctx, cmd->x)));
                 break;
             }
             sb_append(sb, string_format("  %d %d\n", cmd->kind, cmd->x));
             break;
+        }
         }
     }
     return sb_to_str(sb);
