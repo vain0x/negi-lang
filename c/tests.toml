@@ -515,13 +515,17 @@ src = """
 exit = 42
 
 [[eval]]
-name = "array_pop"
+name = "val_type"
 src = """
-    let a = [3, 1, 4];
-    array_pop(a);
-    array_len(a)
+    let ty_int = val_type(0);
+    let ty_str = val_type("");
+
+    let x = 42;
+    let s = val_type(x) == ty_int ? 1 : 0;
+    s = s * 10 + (ty_int != ty_str ? 1 : 0);
+    s
 """
-exit = 2
+exit = 11
 
 [[eval]]
 name = "str_slice"
@@ -530,3 +534,12 @@ src = """
     let t = str_slice(s, 7, 12);
     t == "world" ? 0 : 1
 """
+
+[[eval]]
+name = "array_pop"
+src = """
+    let a = [3, 1, 4];
+    array_pop(a);
+    array_len(a)
+"""
+exit = 2

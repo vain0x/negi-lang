@@ -2468,6 +2468,15 @@ static void eval(Ctx *ctx) {
 #define xarg_ty(i) (xarg_nth(i)->ty)
 #define xarg_val(i) (xarg_nth(i)->val)
 
+static void builtin_val_type(Ctx *ctx, int argc) {
+    if (argc != 1) {
+        extern_frame_reject(ctx, "val_type error");
+        return;
+    }
+
+    extern_frame_resolve(ctx, (Cell){.ty = ty_int, .val = xarg_ty(0)});
+}
+
 static void builtin_str_slice(Ctx *ctx, int argc) {
     if (argc != 3 || xarg_ty(0) != ty_str || xarg_ty(1) != ty_int ||
         xarg_ty(2) != ty_int) {
@@ -2511,6 +2520,7 @@ static void builtin_array_pop(Ctx *ctx, int argc) {
 }
 
 static void extern_fun_builtin(Ctx *ctx) {
+    extern_fun_add(ctx, "val_type", builtin_val_type);
     extern_fun_add(ctx, "str_slice", builtin_str_slice);
     extern_fun_add(ctx, "array_len", builtin_array_len);
     extern_fun_add(ctx, "array_push", builtin_array_push);
