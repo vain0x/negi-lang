@@ -8,7 +8,7 @@
 	sjis_dir = current_dir + "/sjis"
 
 	chdir src_dir
-	dirlist file_name_list, "*.hsp"
+	dirlist file_name_list, "*.*"
 	file_name_count = stat
 
 	sdim file_names, , file_name_count

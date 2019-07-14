@@ -5,8 +5,10 @@ packfile
 src/*.ax
 sjis/*.hsp
 sjis/*.ax
+sjis/*.toml
 .vscode
 c/a.out
+
 
 
 # Created by https://www.gitignore.io/api/windows,macos,linux
