@@ -14,6 +14,193 @@
 #const char_cr 0x0d
 #const char_lf 0x0a
 
+#define ctype char_is_space(%1) \
+	((%1) == ' ' || (%1) == '\t' || (%1) == char_cr || (%1) == char_lf)
+
+#define ctype char_is_ident(%1) \
+	('a' <= (%1) && (%1) <= 'z')
+
+#deffunc negi_test_initialize
+
+	s_toml_file_name = "tests.toml"
+	sdim s_toml_src
+	dim s_toml_src_len
+
+	// name: テストケースの名前
+	// src: ネギ言語のソースコード
+	// err: 期待されるエラー出力
+	// exit: 期待される終了コード
+	sdim s_case_names
+	sdim s_case_srcs
+	sdim s_case_errs
+	dim s_case_exits
+	s_case_len = 0
+
+	return
+
+#deffunc negi_test_fail str message, int i
+
+	dialog message + " (位置 " + i + ")", 1
+	end 1
+
+#deffunc negi_test_load_toml
+
+	exist s_toml_file_name
+	s_toml_src_len = strsize
+	if s_toml_src_len < 0 {
+		negi_test_fail s_toml_file_name + " が見つかりません", 0
+	}
+
+	sdim s_toml_src, s_toml_src_len + 1
+	bload s_toml_file_name, s_toml_src, s_toml_src_len
+	return
+
+// 空白類やコメントをスキップする。
+#deffunc negi_test_parse_spaces var i, \
+	local c
+
+	repeat
+		if i >= s_toml_src_len {
+			break
+		}
+
+		c = peek(s_toml_src, i)
+		if c == '#' {
+			i++
+			negi_test_skip_line i
+			continue
+		}
+		if char_is_space(c) == false {
+			break
+		}
+
+		i++
+	loop
+	return
+
+// 次の改行までスキップする。
+#deffunc negi_test_skip_line var i, \
+	local lf, local offset
+
+	sdim lf
+	poke lf, 0, char_lf
+	offset = instr(s_toml_src, i, lf)
+	if offset < 0 {
+		i = s_toml_src_len
+		return
+	}
+	assert peek(s_toml_src, i + offset) == char_lf
+	i += offset + 1
+	return
+
+// 識別子をパースする。
+#deffunc negi_test_parse_ident var i, \
+	local c
+
+	repeat
+		if i >= s_toml_src_len {
+			break
+		}
+
+		c = peek(s_toml_src, i)
+		if char_is_ident(c) == false {
+			break
+		}
+
+		i++
+	loop
+	return
+
+// エントリーを解析する。
+#deffunc negi_test_parse_entry var i, var key, var value, \
+	local start, local offset, local quote
+
+	negi_test_parse_spaces i
+
+	start = i
+	negi_test_parse_ident i
+	key = strmid(s_toml_src, start, i - start)
+
+	negi_test_parse_spaces i
+	if peek(s_toml_src, i) != '=' {
+		negi_test_fail "= が必要です", i
+	}
+	i++
+	negi_test_parse_spaces i
+
+	// 引用符は "..", """..""", '''..''' の3種類ある。
+	if strmid(s_toml_src, i, 3) == "\"\"\"" {
+		quote = "\"\"\""
+	} else : if strmid(s_toml_src, i, 3) == "'''" {
+		quote = "'''"
+	} else : if peek(s_toml_src, i) == '"' {
+		quote = "\""
+	} else {
+		// 引用符なしは改行までの文字列とみなす (TOML の正式な仕様ではない)
+		start = i
+		negi_test_skip_line i
+		value = strmid(s_toml_src, start, i - start)
+		return
+	}
+
+	// 文字列をパースする。
+	i += strlen(quote)
+	offset = instr(s_toml_src, i, quote)
+	if offset < 0 {
+		negi_test_fail "文字列が閉じられていません", i
+	}
+	value = strmid(s_toml_src, i, offset)
+	i += offset + strlen(quote)
+	return
+
+#deffunc negi_test_parse_toml \
+	local i, local c, local eval_key, local start, local key, local value
+
+	negi_test_parse_spaces i
+
+	repeat
+		if i >= s_toml_src_len {
+			break
+		}
+
+		// [[eval]]
+		eval_key = "[[eval]]"
+		if strmid(s_toml_src, i, strlen(eval_key)) != eval_key {
+			negi_test_fail eval_key + " が必要です", i
+		}
+		i += strlen(eval_key)
+		negi_test_parse_spaces i
+
+		repeat
+			if i >= s_toml_src_len {
+				break
+			}
+
+			c = peek(s_toml_src, i)
+			if char_is_ident(c) == false {
+				break
+			}
+
+			start = i
+			negi_test_parse_entry i, key, value
+			negi_test_parse_spaces i
+
+			if key == "name" {
+				s_case_names(s_case_len) = value
+			} else : if key == "src" {
+				s_case_srcs(s_case_len) = value
+			} else : if key == "err" {
+				s_case_errs(s_case_len) = value
+			} else : if key == "exit" {
+				s_case_exits(s_case_len) = int(value)
+			} else {
+				negi_test_fail "不明なキー: " + key, start
+			}
+		loop
+		s_case_len++
+	loop
+	return
+
 #deffunc test_begin
 	g_pass = 0
 	g_fail = 0
@@ -105,7 +292,15 @@
 
 #deffunc main
 
+	negi_test_initialize
+	negi_test_load_toml
+	negi_test_parse_toml
+
 	test_begin
+
+	repeat s_case_len
+		eval_test s_case_names(cnt), s_case_srcs(cnt), s_case_errs(cnt), s_case_exits(cnt)
+	loop
 
 	eval_test "空のプログラムは何もせず正常終了する", "", "", 0
 	eval_test "終了コードをゼロにできる", "0", "", 0
