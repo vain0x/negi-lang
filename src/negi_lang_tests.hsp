@@ -208,21 +208,21 @@
 	return
 
 #deffunc test_begin
-	g_pass = 0
-	g_fail = 0
+	s_pass = 0
+	s_fail = 0
 	return
 
 #deffunc test_end \
 	local status
 
-	if g_pass == 0 || g_fail > 0 {
+	if s_pass == 0 || s_fail > 0 {
 		status = "失敗 (詳細はデバッグログを参照)"
 	} else {
 		status = "成功"
 	}
 
-	mes "成功数 " + g_pass
-	mes "失敗数 " + g_fail
+	mes "成功数 " + s_pass
+	mes "失敗数 " + s_fail
 	mes "結果 " + status
 	return
 
@@ -290,9 +290,9 @@
 	}
 
 	if ok {
-		g_pass++
+		s_pass++
 	} else {
-		g_fail++
+		s_fail++
 	}
 	return
 
