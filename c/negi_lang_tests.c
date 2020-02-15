@@ -1,3 +1,5 @@
+// LICENSE: CC0-1.0 <https://creativecommons.org/publicdomain/zero/1.0/deed.ja>
+
 #include "negi_lang.h"
 #include "negi_lang_internals.h"
 #include "tomlc99/toml.h"

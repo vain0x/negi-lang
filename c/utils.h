@@ -1,3 +1,5 @@
+// LICENSE: CC0-1.0 <https://creativecommons.org/publicdomain/zero/1.0/deed.ja>
+
 #ifndef NEGI_LANG_UTILS_H
 #define NEGI_LANG_UTILS_H
 
