@@ -6,8 +6,7 @@
 // すべての結果が期待通りなら、たぶん処理系は正しいだろう、ということで安心できる。
 // テストケースは tests.toml を参照。
 
-#runtime "hsp3utf"
-
+#include "hsp3utf.as"
 #include "negi_lang.hsp"
 
 #module m_negi_lang_tests
